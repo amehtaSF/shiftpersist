@@ -13,7 +13,7 @@ output:
 ```{r, echo=F, message=F, warning=F}
 rm(list=ls()) # clear environment variables
 library(lavaan) # structural equation modeling
-library(GGally) # nice corralation matrices
+library(GGally) # nice correlation matrices
 library(tidyverse) # data wrangling and more
 library(tidylog) # adds useful information to output from tidyverse functions
 theme_set(theme_bw()) # set default theme for ggplot
@@ -30,7 +30,7 @@ codebook <- read_csv("codebook.csv")
 # Constants are variables that don't change. They are usually denoted with all caps. Constants in R are only "constants" by convention. Nothing is different from R's perspective. I often use them for document level parameters. Here I am creating a list of the column names of variables that will be changed to be numeric type variables.
 
 NUMERIC_COLS <- c("erq", "ace", "srh", "gender", "pss", "brs", "twn",
-                  "twn_freq", "fear_covid", "age")
+                  "twn_freq", "fear_covid", "age", "msss_us")
 ```
 
 ## Functions
@@ -217,7 +217,7 @@ summary(fit_covariates,
 ```
 
 
-### TWN -> ERQ -> BRS (resilience)
+### ** TWN -> ERQ -> BRS (resilience)
 ```{r}
 mod <- '
 
@@ -541,7 +541,8 @@ summary(fit_covariates,
 ```
 
 
-### TWN -> PRM -> BRS (resilience)
+### ** TWN -> PRM -> BRS (resilience)
+Simple model is marginally sig, covariate model is sig.
 ```{r}
 mod <- '
 
@@ -626,7 +627,7 @@ summary(fit_covariates,
         rsq=TRUE)
 ```
 
-### TWN -> PRM -> PANAS POS
+### *** TWN -> PRM -> PANAS POS
 ```{r}
 mod <- '
 prm ~ a*twn
@@ -775,6 +776,25 @@ df_pid %>%
 df_pid %>% 
   lm(posaff ~ ace*twn + erq, .) %>% 
   summary
+
+df_pid %>% 
+  drop_na(twn, ace, posaff) %>%  
+  mutate(
+    # twn_group = case_when(
+    #   twn >= (mean(twn) + sd(twn)) ~ "+1 MAD",
+    #   twn <= (mean(twn) - sd(twn)) ~ "-1 MAD",
+    #   twn < (mean(twn) + sd(twn)) & twn > (mean(twn) - sd(twn)) ~ "Within 1 MAD"
+    # ),
+    twn_group = case_when(
+      twn > quantile(twn, .66) ~ ">66 percentile",
+      twn < quantile(twn, .33)  ~ "<33 percentile",
+      twn <= quantile(twn, .66) & twn >= quantile(twn, .33) ~ "33-66 percentile"
+    )) %>% 
+  mutate(twn_group = as.factor(twn_group)) %>% 
+  ggplot(aes(x = ace, y = posaff, color = twn_group)) + 
+  geom_point(alpha = .2) + 
+  geom_smooth(method="lm")
+
 
 
 mod <- '
@@ -1081,6 +1101,215 @@ summary(fit,
 mod_covariates <-'
 erq ~ a1*svi + a2*twn + a3*svi:twn + fear_covid + age + gender
 brs ~ c1*svi + c2*twn + c3*svi:twn + b*erq + fear_covid + age + gender
+
+indirect := a3*b
+total := c3 + indirect
+'
+fit_covariates <- sem(mod_covariates,
+           data = df_pid)
+summary(fit_covariates,
+        standardized=TRUE,
+        rsq=TRUE)
+```
+## MSSS_US -> outcome moderated by ERQ
+
+### MSSS_US -> PSS Moderated by TWN -> ERQ
+```{r}
+df_pid %>% 
+  lm(pss ~ msss_us, .) %>% 
+  summary
+df_pid %>% 
+  lm(pss ~ msss_us*erq, .) %>% 
+  summary
+df_pid %>% 
+  lm(pss ~ msss_us*twn, .) %>% 
+  summary
+df_pid %>% 
+  lm(pss ~ msss_us*twn_freq, .) %>% 
+  summary
+
+
+mod <- '
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn 
+pss ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq
+indirect := a3*b
+total := c3 + indirect
+'
+fit <- sem(mod,
+           data = df_pid)
+summary(fit,
+        standardized=TRUE,
+        rsq=TRUE)
+
+mod_covariates <-'
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn + fear_covid + age + gender
+pss ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq + fear_covid + age + gender
+
+indirect := a3*b
+total := c3 + indirect
+'
+fit_covariates <- sem(mod_covariates,
+           data = df_pid)
+summary(fit_covariates,
+        standardized=TRUE,
+        rsq=TRUE)
+```
+
+### MSSS_US -> SRH Moderated by TWN -> ERQ
+```{r}
+df_pid %>% 
+  lm(srh ~ msss_us, .) %>% 
+  summary
+df_pid %>% 
+  lm(srh ~ msss_us*erq, .) %>% 
+  summary
+df_pid %>% 
+  lm(srh ~ msss_us*twn, .) %>% 
+  summary
+df_pid %>% 
+  lm(srh ~ msss_us*twn_freq, .) %>% 
+  summary
+
+
+mod <- '
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn 
+srh ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq
+indirect := a3*b
+total := c3 + indirect
+'
+fit <- sem(mod,
+           data = df_pid)
+summary(fit,
+        standardized=TRUE,
+        rsq=TRUE)
+
+mod_covariates <-'
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn + fear_covid + age + gender
+srh ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq + fear_covid + age + gender
+
+indirect := a3*b
+total := c3 + indirect
+'
+fit_covariates <- sem(mod_covariates,
+           data = df_pid)
+summary(fit_covariates,
+        standardized=TRUE,
+        rsq=TRUE)
+```
+
+### MSSS_US -> PANAS POS Moderated by TWN -> ERQ
+```{r}
+df_pid %>% 
+  lm(posaff ~ msss_us, .) %>% 
+  summary
+df_pid %>% 
+  lm(posaff ~ msss_us*erq, .) %>% 
+  summary
+df_pid %>% 
+  lm(posaff ~ msss_us*twn, .) %>% 
+  summary
+
+
+mod <- '
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn 
+posaff ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq
+indirect := a3*b
+total := c3 + indirect
+'
+fit <- sem(mod,
+           data = df_pid)
+summary(fit,
+        standardized=TRUE,
+        rsq=TRUE)
+
+mod_covariates <-'
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn + fear_covid + age + gender
+posaff ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq + fear_covid + age + gender
+
+indirect := a3*b
+total := c3 + indirect
+'
+fit_covariates <- sem(mod_covariates,
+           data = df_pid)
+summary(fit_covariates,
+        standardized=TRUE,
+        rsq=TRUE)
+```
+
+### MSSS_US -> PANAS neg Moderated by TWN -> ERQ 
+```{r}
+df_pid %>% 
+  lm(negaff ~ msss_us, .) %>% 
+  summary
+df_pid %>% 
+  lm(negaff ~ msss_us*erq, .) %>% 
+  summary
+df_pid %>% 
+  lm(negaff ~ msss_us*twn, .) %>% 
+  summary
+df_pid %>% 
+  lm(negaff ~ msss_us*twn_freq, .) %>% 
+  summary
+
+
+mod <- '
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn 
+negaff ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq
+indirect := a3*b
+total := c3 + indirect
+'
+fit <- sem(mod,
+           data = df_pid)
+summary(fit,
+        standardized=TRUE,
+        rsq=TRUE)
+
+mod_covariates <-'
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn + fear_covid + age + gender
+negaff ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq + fear_covid + age + gender
+
+indirect := a3*b
+total := c3 + indirect
+'
+fit_covariates <- sem(mod_covariates,
+           data = df_pid)
+summary(fit_covariates,
+        standardized=TRUE,
+        rsq=TRUE)
+
+```
+
+### MSSS_US -> BRS Moderated by TWN -> ERQ
+```{r}
+df_pid %>% 
+  lm(brs ~ msss_us, .) %>% 
+  summary
+df_pid %>% 
+  lm(brs ~ msss_us*erq, .) %>% 
+  summary
+df_pid %>% 
+  lm(brs ~ msss_us*twn, .) %>% 
+  summary
+df_pid %>% 
+  lm(brs ~ msss_us*twn_freq, .) %>% 
+  summary
+
+
+mod <- '
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn 
+brs ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq
+indirect := a3*b
+total := c3 + indirect
+'
+fit <- sem(mod,
+           data = df_pid)
+summary(fit,
+        standardized=TRUE,
+        rsq=TRUE)
+
+mod_covariates <-'
+erq ~ a1*msss_us + a2*twn + a3*msss_us:twn + fear_covid + age + gender
+brs ~ c1*msss_us + c2*twn + c3*msss_us:twn + b*erq + fear_covid + age + gender
 
 indirect := a3*b
 total := c3 + indirect
