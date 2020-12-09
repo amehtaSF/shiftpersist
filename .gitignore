@@ -4,3 +4,4 @@ box/
 *.Rproj*
 data/
 *.html
+.Rproj.user
