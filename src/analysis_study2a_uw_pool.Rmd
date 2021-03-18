@@ -72,12 +72,15 @@ remove_outliers <- function(x, na.rm = TRUE, ...) {
 }
 ```
 
-## File paths
+## Constants
 ```{r}
 CODEBOOK_FILEPATH <- "lib/Codebook_Study_2a_Psych_Pool_Winter2021_EWB_Shift_Persist.xlsx"
 DATA_FILEPATH <- "data/raw/Study_2A_UW_Psych_Pool_EWB_GB.xlsx"
-```
 
+
+
+COLS_TO_NUMERIC <- c("twn", "freq")
+```
 
 
 ## Read data
@@ -96,11 +99,6 @@ df_raw <- df_file %>%
 	# -- recode variables -- #
 	codebook_recoder(codebook=codebook_values) 
 
-```
-
-## Constants
-```{r}
-cols_to_numeric <- c("twn", "freq")
 ```
 
 
@@ -131,8 +129,6 @@ df_proc <- df_raw %>%
   
 
 ```
-
- STILL NEED TO ADD REVERSE CODEING TO CODEBOOK
 
 
 # END PREPROCESSING
