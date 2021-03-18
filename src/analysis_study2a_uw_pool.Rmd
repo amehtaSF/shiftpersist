@@ -1,0 +1,264 @@
+---
+title: "Untitled"
+author: "Ashish"
+date: "3/16/2021"
+output: html_document
+---
+
+# Initialization
+```{r}
+rm(list=ls())
+library(lavaan)
+library(GGally)
+library(tidyverse)
+library(tidylog)
+```
+
+# Preprocessing
+## Functions
+```{r}
+codebook_renamer <- function(df, codebook, old_col_name="old_col_name", new_col_name="new_col_name"){
+  df %>% 
+  rename_at(vars(codebook[[old_col_name]]), ~codebook[[new_col_name]])
+}
+recoder <- function(column, var_regex, var_col_name, codebook=codebook_values){
+  codebook <- codebook %>%
+    dplyr::filter(!is.na(old_value) | !is.na(new_value)) %>% 
+    dplyr::mutate_at(vars(old_value, new_value), ~replace_na(., "<na_value>"))
+  column <- column %>% 
+    replace_na(., "<na_value>")
+	level_key <- codebook %>%
+	  dplyr::filter(.data[[var_col_name]]==!!var_regex) %>% 
+	  dplyr::mutate(old_value = tolower(old_value)) %>% 
+		dplyr::select(old_value, new_value) %>%
+		deframe
+	level_key <- c(level_key, "<na_value>"=NA)
+	recoded_column <- recode(tolower(column), !!!level_key)
+	 return(recoded_column)
+}
+codebook_recoder <- function(df, codebook, var_col_name="var_regex"){
+  var_regexes <- unique(codebook[[var_col_name]])
+  for(var in var_regexes){
+    df <- df %>% 
+      dplyr::mutate_at(vars(matches(paste0("^", var))), ~recoder(., var_regex=var, var_col_name=var_col_name))
+  }
+  return(df)
+}
+tally_scale <- function(df, scale_regex, new_col_name=NULL, pid_col="pid", na.rm=T, FUN=mean){
+  if(is.null(new_col_name)) new_col_name <- scale_regex
+  df %>% 
+    select(one_of(pid_col), starts_with(scale_regex)) %>% 
+    mutate_at(vars(starts_with(scale_regex)), as.numeric) %>% 
+    pivot_longer(-one_of(pid_col)) %>% 
+    group_by_at(pid_col) %>%
+    summarize(!!new_col_name := FUN(value, na.rm=na.rm))
+}
+
+flag_outliers <- function(x, na.rm = TRUE) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm)
+  H <- 1.5 * IQR(x, na.rm = na.rm)
+  y <- rep(FALSE, times=length(x))
+  y[x < (qnt[1] - H)] <- TRUE
+  y[x > (qnt[2] + H)] <- TRUE
+  y
+}
+remove_outliers <- function(x, na.rm = TRUE, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
+  H <- 1.5 * IQR(x, na.rm = na.rm)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  y
+}
+```
+
+## Read data
+```{r}
+codebook_vars <- readxl::read_excel("lib/Codebook_Study 2A Psych Pool_Winter2021_EWB Shift Persist.xlsx", sheet="variables")
+codebook_values <- readxl::read_excel("lib/Codebook_Study 2A Psych Pool_Winter2021_EWB Shift Persist.xlsx", sheet="values")
+
+df_file <- readxl::read_excel("data/raw/Study 2A UW Psych Pool_EWB GB.xlsx") %>% 
+  slice(-1)
+
+df_raw <- df_file %>% 
+  # -- rename columns -- #
+  codebook_renamer(codebook=codebook_vars) %>% 
+  # -- add 4 digit pid -- #
+  mutate(pid = 1000:(999+nrow(.))) %>% 
+	# -- recode variables -- #
+	codebook_recoder(codebook=codebook_values) 
+
+```
+
+## Constants
+```{r}
+cols_to_numeric <- c("twn", "freq")
+```
+
+
+## Process data
+```{r}
+df_proc <- df_raw %>% 
+  # -- ER strategies -- #
+  full_join(tally_scale(., "erq_reap", "erq_reap_mean")) %>% 
+  full_join(tally_scale(., "erq_supp", "erq_supp_mean")) %>% 
+  full_join(tally_scale(., "erqdf_", "erqdf_mean")) %>% 
+  full_join(tally_scale(., "ss_approach_", "ss_approach_mean")) %>% 
+  full_join(tally_scale(., "ss_avoid_", "ss_avoid_mean")) %>% 
+  full_join(tally_scale(., "ss_", "ss_mean")) %>% 
+  full_join(tally_scale(., "rs_", "rs_mean")) %>% 
+  # -- affective outcomes -- #
+  # pos
+  full_join(tally_scale(., "swl_", "swl_mean")) %>% 
+  full_join(tally_scale(., "ewb_", "ewb_mean")) %>% 
+  full_join(tally_scale(., "fm_", "fm_mean")) %>% 
+  full_join(tally_scale(., "panas_pa_", "panas_pa_mean")) %>% 
+  # neg
+  full_join(tally_scale(., "panas_na_", "panas_na_mean")) %>% 
+  full_join(tally_scale(., "pss_", "pss_mean")) %>% 
+  # -- convert to numeric -- #
+  mutate_at(vars(one_of(cols_to_numeric)), as.numeric) %>% 
+  # -- drop outliers -- #
+  mutate(twn_nooutliers = remove_outliers(twn)) 
+  
+
+```
+
+ STILL NEED TO ADD REVERSE CODEING TO CODEBOOK
+
+
+# END PREPROCESSING
+```{r}
+# ------ End Preprocessing ------ #
+# ----- Run all chunks above -----#
+```
+
+# Analysis
+
+```{r}
+df_proc %>% 
+  ggplot(aes(x = twn)) + 
+  geom_histogram()
+df_proc %>% 
+  ggplot(aes(x = freq)) + 
+  geom_histogram()
+```
+
+
+1A. We hypothesize that nature contact will be associated with greater frequency of:
+(i) situation selection in the form of approaching positively valenced situations, 
+(ii) distraction, and 
+(iii) reappraisal strategies and 
+(iv) lesser frequency of rumination. 
+
+Moreover, we hypothesize that emotion regulation strategies will be related to affective outcomes.
+
+1B. We hypothesize that frequency of distraction, reappraisal, and rumination will mediate the association of nature contact with affective outcomes.
+
+2A. We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes.
+
+2B. We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
+
+## H1a
+Strategies associated with TWN: reappraisal, rumination (marginal)
+Outcomes associated with TWN: Neg affect, flourishing (marginal), swl
+```{r}
+df_proc %>% 
+  select(twn,twn_nooutliers, freq,
+         ss_approach_mean, ss_avoid_mean, ss_mean,
+         erq_reap_mean, erq_supp_mean, erqdf_mean, rs_mean,
+         swl_mean, ewb_mean, fm_mean, panas_pa_mean,
+         panas_na_mean, pss_mean) %>% 
+  ggpairs()
+cor.test(df_proc$freq, df_proc$ss_approach_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$ss_avoid_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$ss_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$erq_reap_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$erq_supp_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$erqdf_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$rs_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$swl_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$ewb_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$panas_pa_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$panas_na_mean, method="spearman")
+cor.test(df_proc$freq, df_proc$pss_mean, method="spearman")
+```
+
+## H1b: twn -> reappraisal -> neg affect
+```{r}
+mod <- '
+erq_reap_mean ~ a*twn
+panas_na_mean ~ b*erq_reap_mean + cp*twn
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, data=df_proc, se = "bootstrap")
+summary(fit, standardized = TRUE)
+parameterestimates(fit, boot.ci.type = "bca.simple", standardized = TRUE) 
+```
+
+## H1b:  twn -> reappraisal -> swl
+```{r}
+mod <- '
+erq_reap_mean ~ a*twn
+swl_mean ~ b*erq_reap_mean + cp*twn
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, data=df_proc, se = "bootstrap")
+summary(fit, standardized = TRUE)
+parameterestimates(fit, boot.ci.type = "bca.simple", standardized = TRUE) 
+```
+
+## H1b:  twn -> reappraisal -> fm_mean
+```{r}
+mod <- '
+erq_reap_mean ~ a*twn
+fm_mean ~ b*erq_reap_mean + cp*twn
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, data=df_proc, se = "bootstrap")
+summary(fit, standardized = TRUE)
+parameterestimates(fit, boot.ci.type = "bca.simple", standardized = TRUE) 
+```
+
+## H1b: twn -> rumination -> neg affect
+```{r}
+mod <- '
+rs_mean ~ a*twn
+panas_na_mean ~ b*rs_mean + cp*twn
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, data=df_proc, se = "bootstrap")
+summary(fit, standardized = TRUE)
+parameterestimates(fit, boot.ci.type = "bca.simple", standardized = TRUE) 
+```
+
+## H1b:  twn -> rumination -> swl
+```{r}
+mod <- '
+rs_mean ~ a*twn
+swl_mean ~ b*rs_mean + cp*twn
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, data=df_proc, se = "bootstrap")
+summary(fit, standardized = TRUE)
+parameterestimates(fit, boot.ci.type = "bca.simple", standardized = TRUE) 
+```
+
+## H1b:  twn -> rumination -> fm_mean
+```{r}
+mod <- '
+rs_mean ~ a*twn
+fm_mean ~ b*rs_mean + cp*twn
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, data=df_proc, se = "bootstrap")
+summary(fit, standardized = TRUE)
+parameterestimates(fit, boot.ci.type = "bca.simple", standardized = TRUE) 
+```
+
