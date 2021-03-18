@@ -1,0 +1,368 @@
+---
+title: "Shift and Persist nature project"
+author: "Ashish"
+date: "`r format(Sys.time(), '%a/%d/%b')`"
+output: 
+  html_document:
+    toc: true
+---
+
+# Initialization and Preprocessing
+
+## Libraries
+```{r, echo=F, message=F, warning=F}
+rm(list=ls()) # clear environment variables
+library(brms) # bayesian models
+library(lavaan) # structural equation modeling
+library(GGally) # nice correlation matrices
+library(tidyverse) # data wrangling and more
+library(tidylog) # adds useful information to output from tidyverse functions
+theme_set(theme_bw()) # set default theme for ggplot
+```
+
+## Codebook
+```{r, echo=F, message=F, warning=F}
+# The codebook is used to rename columns
+codebook <- read_csv("codebook.csv")
+```
+
+## Constants
+```{r, echo=F, message=F, warning=F}
+# Constants are variables that don't change. They are usually denoted with all caps. Constants in R are only "constants" by convention. Nothing is different from R's perspective. I often use them for document level parameters. Here I am creating a list of the column names of variables that will be changed to be numeric type variables.
+
+NUMERIC_COLS <- c("erq", "ace", "srh", "gender", "pss", "brs", "twn",
+                  "twn_freq", "fear_covid", "age", "msss_us", "msss_comm", "uwaid")
+```
+
+## Functions
+### Helper functions
+```{r, echo=F, message=F, warning=F}
+reverse_code <- function(x, min_val, max_val){
+  max_val + min_val - as.numeric(x)
+}
+```
+
+### Modeling functions
+```{r, echo=F, message=F, warning=F}
+
+build_model_med_mod <- function(predictor_var, mediator_var, outcome_var, moderator_var, covariates=NA){
+  # build a lavaan model definition for mediated moderation
+  if(any(is.na(covariates)))
+  {
+    mod <- 
+      paste(
+        paste0(mediator_var, ' ~ a1*', predictor_var,' + a2*',
+               moderator_var,' + a3*', predictor_var,':',moderator_var),
+        paste0(outcome_var,' ~ c1*',predictor_var,' + c2*',moderator_var,' + c3*',
+               predictor_var,':',moderator_var,' + b*',mediator_var),
+        paste0('indirect := a3*b'),
+        paste0('total := c3 + indirect'),
+        sep='\n')}
+  else 
+  {
+    covariates <- paste(covariates, collapse = ' + ')
+    mod <- 
+      paste(
+        paste0(mediator_var, ' ~ a1*', predictor_var,' + a2*',
+               moderator_var,' + a3*', predictor_var,':',moderator_var, ' + ', covariates),
+        paste0('brs ~ c1*',predictor_var,' + c2*',moderator_var,' + c3*',
+               predictor_var,':',moderator_var,' + b*',mediator_var, ' + ', covariates),
+        paste0('indirect := a3*b'),
+        paste0('total := c3 + indirect'),
+        sep='\n')}
+    
+    return(mod)
+}
+build_model_med <- function(predictor_var, mediator_var, outcome_var, covariates=NA){
+  # build a lavaan model definition for simple mediation
+  if(any(is.na(covariates)))
+  {
+    mod <- 
+      paste(
+        paste0(mediator_var, ' ~ a*', predictor_var),
+        paste0(outcome_var,' ~ c*',predictor_var, ' + b*', mediator_var),
+        paste0('indirect := a*b'),
+        paste0('total := c + indirect'),
+        sep='\n')}
+  else 
+  {
+    covariates <- paste(covariates, collapse = ' + ')
+    mod <- 
+      paste(
+        paste0(mediator_var, ' ~ a*', predictor_var, ' + ', covariates),
+        paste0(outcome_var,' ~ c*',predictor_var, ' + b*', mediator_var, ' + ', covariates),
+        paste0('indirect := a*b'),
+        paste0('total := c + indirect'),
+        sep='\n')}
+    
+    return(mod)
+}
+
+fit_model_med_mod <- function(predictor_var, mediator_var, outcome_var, moderator_var, covariates=NA){
+  sem(build_model_med_mod(predictor_var, mediator_var, outcome_var, moderator_var, covariates), 
+      data = df_pid)
+}
+
+fit_model_med <- function(predictor_var, mediator_var, outcome_var, covariates=NA){
+  sem(build_model_med(predictor_var, mediator_var, outcome_var, covariates), 
+      data = df_pid)
+}
+
+get_parameter_value <- function(model_fit, variable, parameter){
+  parameterEstimates(model_fit, standardized = T) %>% 
+    dplyr::filter(label==variable) %>% 
+    pull(get(parameter))
+}
+
+
+```
+
+
+## Data
+```{r, echo=F, message=F, warning=F}
+df_raw <- read_csv("data/raw/fall_2020_survey_ewb.csv") %>% 
+  slice(-1) # remove top row
+
+
+df_proc <- df_raw %>% 
+  # -- create a 4 digit participant ID -- #
+  mutate(pid = row_number() + 1000) %>% 
+  # -- reorder columns so pid is first -- #
+  select(pid, everything()) %>%
+  # -- rename columns -- #
+  rename_at(vars(codebook$old_col_name), ~codebook$new_col_name) %>% 
+  # -- make column names lowercase -- #
+  rename_all(tolower) %>%  
+  # -- recode binary vars to 1/0 -- #
+  mutate(gender = case_when(gender == 2 ~ 1, gender == 1 ~ 0)) %>%  # female = 1
+  mutate(uwaid = case_when(uwaid == 2 ~ 0, uwaid == 1 ~ 1)) %>%  # gets aid = 1
+  # -- recode income NAs -- #
+  mutate(income = ifelse(income == 13, NA, income)) %>% 
+  mutate(income_numeric = as.numeric(income)) %>% 
+  mutate(income = ordered(income, levels=c(1,2,3,4,5,6,7,8,9,10,11,12))) %>% 
+  # -- reverse coding -- #
+  mutate_at(vars(matches("^pss_.*_rev$")), ~reverse_code(., 0, 4)) %>% 
+  mutate_at(vars(matches("^brs_.*_rev$")), ~reverse_code(., 1, 5)) %>% 
+  # -- feature engineering -- #
+  mutate(shanahan_binary = ifelse(twn_freq <= 4, 0, 1))
+
+# -- participant level ACE score -- #
+df_ace_pid <- df_proc %>% 
+  # -- select the columns I need
+  select(pid, starts_with("ace_")) %>% 
+  # -- change data to long format (each question gets it's own row instead of each participant getting own row)
+  pivot_longer(-pid) %>% 
+  # -- change the variable called "value" to a numeric type column
+  mutate(value = as.numeric(value)) %>% 
+  # -- get the sum of the value column for each participant and store it in a new variable called "ace"
+  group_by(pid) %>% 
+  summarize(ace = sum(value)) %>% 
+  # -- create a binary variable that is 1 for high ace and 0 for low ace
+  mutate(high_ace = case_when(ace <= 4 ~ 1, ace > 4 ~ 0))
+
+# -- participant level ERQ reappraisal score -- #
+df_erq_pid <- df_proc %>% 
+  select(pid, starts_with("erq_r_")) %>% 
+  pivot_longer(-pid) %>% 
+  mutate(value = as.numeric(value)) %>% 
+  group_by(pid) %>% 
+  summarize(erq = sum(value)) 
+
+# -- participant level ERQ suppression score -- #
+df_erqs_pid <- df_proc %>% 
+  select(pid, starts_with("erq_s_")) %>% 
+  pivot_longer(-pid) %>% 
+  mutate(value = as.numeric(value)) %>% 
+  group_by(pid) %>% 
+  summarize(erqs = sum(value)) 
+
+# -- participant level PSS -- #
+df_pss_pid <- df_proc %>% 
+  select(pid, starts_with("pss_")) %>% 
+  mutate_at(vars(starts_with("pss_")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(pss = sum(value)) 
+
+# -- participant level BRS -- #
+df_brs_pid <- df_proc %>% 
+  select(pid, starts_with("brs_")) %>% 
+  mutate_at(vars(starts_with("brs_")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(brs = mean(value)) 
+  
+# -- participant level PANAS pos -- #
+df_posaff_pid <- df_proc %>% 
+  select(pid, starts_with("panas_pa_")) %>% 
+  mutate_at(vars(starts_with("panas_pa_")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(posaff = mean(value)) 
+
+# -- participant level PANAS neg -- #
+df_negaff_pid <- df_proc %>% 
+  select(pid, starts_with("panas_na_")) %>% 
+  mutate_at(vars(starts_with("panas_na_")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(negaff = mean(value)) 
+
+# -- participant level cohesion -- #
+df_pcs_pid <- df_proc %>% 
+  select(pid, starts_with("pcs_")) %>% 
+  mutate_at(vars(starts_with("pcs_")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(pcs = mean(value)) 
+
+# -- participant level reappraisal (midus) -- #
+df_prm_pid <- df_proc %>% 
+  select(pid, starts_with("pr_midus")) %>% 
+  mutate_at(vars(starts_with("pr_midus")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(prm = sum(value)) 
+
+# -- participant level social vulnerability -- #
+df_svi_pid <- df_proc %>% 
+  select(pid, starts_with("svi")) %>% 
+  mutate_at(vars(starts_with("svi")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(svi = sum(value)) 
+
+# -- participant level rumination -- #
+df_rs_pid <- df_proc %>% 
+  select(pid, starts_with("rs_")) %>% 
+  mutate_at(vars(starts_with("rs_")), as.numeric) %>% 
+  pivot_longer(-pid) %>% 
+  group_by(pid) %>% 
+  summarize(rs = sum(value)) 
+
+# -- combine all participant level scores to full data frame -- #
+df_pid <- df_proc %>% 
+  full_join(df_ace_pid) %>% 
+  full_join(df_erq_pid) %>% 
+  full_join(df_pss_pid) %>% 
+  full_join(df_brs_pid) %>% 
+  full_join(df_posaff_pid) %>% 
+  full_join(df_negaff_pid) %>% 
+  full_join(df_pcs_pid) %>% 
+  full_join(df_prm_pid) %>% 
+  full_join(df_svi_pid) %>% 
+  full_join(df_rs_pid) %>% 
+  full_join(df_erqs_pid) %>% 
+  mutate_at(vars(one_of(NUMERIC_COLS)), as.numeric) %>% # change variable types
+  # -- create interaction variables -- #
+  mutate(
+    ace_twn = ace*twn
+  ) %>% 
+  # -- create categorical variables
+  mutate(
+    ace_group = case_when(
+      ace > quantile(ace, .66, na.rm=T) ~ ">66 percentile",
+      ace <= quantile(ace, .33, na.rm=T)  ~ "<=33 percentile",
+      ace <= quantile(ace, .66, na.rm=T) & 
+        ace > quantile(ace, .33, na.rm=T) ~ "33-66 percentile"
+    ),
+    twn_group = case_when(
+      twn > quantile(twn, .66, na.rm=T) ~ ">66 percentile",
+      twn < quantile(twn, .33, na.rm=T)  ~ "<33 percentile",
+      twn <= quantile(twn, .66, na.rm=T) & twn >= quantile(twn, .33, na.rm=T) ~ "33-66 percentile"
+    ),
+    msss_us_group = case_when(
+      msss_us > quantile(msss_us, .66, na.rm=T) ~ ">66 percentile",
+      msss_us < quantile(msss_us, .33, na.rm=T)  ~ "<33 percentile",
+      msss_us <= quantile(msss_us, .66, na.rm=T) & 
+        msss_us >= quantile(msss_us, .33, na.rm=T) ~ "33-66 percentile"
+    ),
+    msss_comm_group = case_when(
+      msss_comm > quantile(msss_comm, .66, na.rm=T) ~ ">66 percentile",
+      msss_comm < quantile(msss_comm, .33, na.rm=T)  ~ "<33 percentile",
+      msss_comm <= quantile(msss_comm, .66, na.rm=T) & 
+        msss_comm >= quantile(msss_comm, .33, na.rm=T) ~ "33-66 percentile"
+    ),
+    )
+```
+
+# End preprocessing
+```{r, echo=F, message=F, warning=F}
+# -- END PREPROCESSING -- #
+```
+
+# Grid search
+
+## Simple mediation
+
+### Variables
+```{r}
+predictor_vars <- c("twn", "shanahan_binary", "ace", "msss_comm", "msss_us", "income_numeric")
+mediator_vars <- c("erq", "erqs", "rs")
+outcome_vars <- c("posaff", "negaff", "srh", "pss")
+```
+
+### Grid search
+```{r}
+df_result_model <- crossing(predictor_vars, mediator_vars, outcome_vars) %>% 
+  mutate(model = pmap(list(predictor_vars, mediator_vars, outcome_vars), fit_model_med)) 
+
+df_result_params <- df_result_model %>% 
+  mutate(
+    a_est = map_dbl(model, ~get_parameter_value(., "a", "est")),
+    a_stdest = map_dbl(model, ~get_parameter_value(., "a", "std.all")),
+    a_pvalue = map_dbl(model, ~get_parameter_value(., "a", "pvalue")),
+    b_est = map_dbl(model, ~get_parameter_value(., "b", "est")),
+    b_stdest = map_dbl(model, ~get_parameter_value(., "b", "std.all")),
+    b_pvalue = map_dbl(model, ~get_parameter_value(., "b", "pvalue")),
+    indirect_est = map_dbl(model, ~get_parameter_value(., "indirect", "est")),
+    indirect_stdest = map_dbl(model, ~get_parameter_value(., "indirect", "std.all")),
+    indirect_pvalue = map_dbl(model, ~get_parameter_value(., "indirect", "pvalue")),
+    total_est = map_dbl(model, ~get_parameter_value(., "total", "est")),
+    total_stdest = map_dbl(model, ~get_parameter_value(., "total", "std.all")),
+    total_pvalue = map_dbl(model, ~get_parameter_value(., "total", "pvalue"))
+    ) %>% 
+  select(-model) %>% 
+  arrange(indirect_pvalue)
+df_result_params %>% 
+  write_csv("output/simple_mediation_grid_search.csv")
+```
+
+## Mediated moderation
+
+### Variables
+```{r}
+predictor_vars <- c("ace", "msss_comm", "msss_us", "income_numeric")
+mediator_vars <- c("erq", "erqs", "rs")
+outcome_vars <- c("posaff", "negaff", "srh", "pss")
+moderator_vars <- c("twn", "shanahan_binary")
+```
+
+### Grid search
+```{r}
+df_result_model <- crossing(predictor_vars, mediator_vars, outcome_vars, moderator_vars) %>% 
+  mutate(model = pmap(list(predictor_vars, mediator_vars, outcome_vars, moderator_vars), fit_model_med_mod)) 
+
+df_result_params <- df_result_model %>% 
+  mutate(
+    a_est = map_dbl(model, ~get_parameter_value(., "a3", "est")),
+    a_stdest = map_dbl(model, ~get_parameter_value(., "a3", "std.all")),
+    a_pvalue = map_dbl(model, ~get_parameter_value(., "a3", "pvalue")),
+    b_est = map_dbl(model, ~get_parameter_value(., "b", "est")),
+    b_stdest = map_dbl(model, ~get_parameter_value(., "b", "std.all")),
+    b_pvalue = map_dbl(model, ~get_parameter_value(., "b", "pvalue")),
+    indirect_est = map_dbl(model, ~get_parameter_value(., "indirect", "est")),
+    indirect_stdest = map_dbl(model, ~get_parameter_value(., "indirect", "std.all")),
+    indirect_pvalue = map_dbl(model, ~get_parameter_value(., "indirect", "pvalue")),
+    total_est = map_dbl(model, ~get_parameter_value(., "total", "est")),
+    total_stdest = map_dbl(model, ~get_parameter_value(., "total", "std.all")),
+    total_pvalue = map_dbl(model, ~get_parameter_value(., "total", "pvalue"))
+    ) %>% 
+  select(-model)%>% 
+  arrange(indirect_pvalue)
+df_result_params %>% 
+  write_csv("output/mediated_moderation_grid_search.csv")
+```
+
+
+
