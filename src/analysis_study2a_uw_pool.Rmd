@@ -72,12 +72,20 @@ remove_outliers <- function(x, na.rm = TRUE, ...) {
 }
 ```
 
+## File paths
+```{r}
+CODEBOOK_FILEPATH <- "lib/Codebook_Study_2a_Psych_Pool_Winter2021_EWB_Shift_Persist.xlsx"
+DATA_FILEPATH <- "data/raw/Study 2A UW Psych Pool_EWB GB.xlsx"
+```
+
+
+
 ## Read data
 ```{r}
-codebook_vars <- readxl::read_excel("lib/Codebook_Study 2A Psych Pool_Winter2021_EWB Shift Persist.xlsx", sheet="variables")
-codebook_values <- readxl::read_excel("lib/Codebook_Study 2A Psych Pool_Winter2021_EWB Shift Persist.xlsx", sheet="values")
+codebook_vars <- readxl::read_excel(CODEBOOK_FILEPATH, sheet="variables")
+codebook_values <- readxl::read_excel(CODEBOOK_FILEPATH, sheet="values")
 
-df_file <- readxl::read_excel("data/raw/Study 2A UW Psych Pool_EWB GB.xlsx") %>% 
+df_file <- readxl::read_excel(DATA_FILEPATH) %>% 
   slice(-1)
 
 df_raw <- df_file %>% 
