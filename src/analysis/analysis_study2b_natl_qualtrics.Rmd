@@ -1,0 +1,421 @@
+---
+title: "National Qualtrics Study"
+author: "Ashish"
+date: "4/26/2021"
+output: rmdformats::readthedown
+---
+
+# Notes
+## TODO
+* Need to figure out how to deal with heteroscedasticity for time in nature. E.g. in mediation models
+  * Lim & Melville. (2009). Robustness of Structural Equation Modeling to Distributional Misspecification: Empirical Evidence & Research Guidelines 
+
+# Initialization
+```{r, message=FALSE}
+rm(list=ls())
+library(lavaan)
+library(lmerTest)
+
+library(here)
+library(tidyverse)
+library(tidylog)
+require(rmdformats)
+theme_set(theme_bw())
+```
+
+# Preprocessing
+## Functions
+```{r}
+codebook_renamer <- function(df, codebook, old_col_name="old_col_name", new_col_name="new_col_name"){
+  codebook <- codebook %>%
+    dplyr::filter(.data[[old_col_name]] %in% names(df))
+  df %>% 
+  rename_at(vars(codebook[[old_col_name]]), ~codebook[[new_col_name]])
+}
+recoder <- function(column, var_regex, var_col_name, codebook=codebook_values){
+  codebook <- codebook %>%
+    dplyr::filter(!is.na(old_value) | !is.na(new_value)) %>% 
+    dplyr::mutate_at(vars(old_value, new_value), ~replace_na(., "<na_value>"))
+  column <- column %>% 
+    replace_na(., "<na_value>")
+	level_key <- codebook %>%
+	  dplyr::filter(.data[[var_col_name]]==!!var_regex) %>% 
+	  dplyr::mutate(old_value = tolower(old_value)) %>% 
+		dplyr::select(old_value, new_value) %>%
+		deframe
+	level_key <- c(level_key, "<na_value>"=NA)
+	recoded_column <- recode(tolower(column), !!!level_key)
+	recoded_column <- as.numeric(recoded_column)
+	 return(recoded_column)
+}
+codebook_recoder <- function(df, codebook, var_col_name="var_regex"){
+  var_regexes <- unique(codebook[[var_col_name]])
+  for(var in var_regexes){
+    df <- df %>% 
+      dplyr::mutate_at(vars(matches(paste0("^", var))), 
+                       ~recoder(., var_regex=var, var_col_name=var_col_name))
+  }
+  return(df)
+}
+tally_scale <- function(df, scale_regex, new_col_name=NULL, pid_col="pid", join_function=dplyr::full_join, na.rm=F, tally_function=sum){
+  # if user did not supply a new column name, use the scale_regex
+  if(is.null(new_col_name)) new_col_name <- scale_regex 
+  if(any(duplicated(df[[pid_col]]))){stop("Duplicate IDs found")}
+  # append ^ to start of regex
+  scale_regex <- paste0("^", scale_regex) 
+  cols_to_tally <- names(df)[str_detect(names(df), scale_regex)] # identify columns to aggregate
+  print(paste0("[",new_col_name, "] tallying columns:"))
+  print(cols_to_tally)
+  df_tally <- df %>% 
+    dplyr::select(one_of(pid_col), one_of(cols_to_tally)) %>% # select columns to aggregate
+    tidyr::pivot_longer(-one_of(pid_col)) %>% # convert to long format 
+    dplyr::group_by_at(pid_col) %>% # group by participant
+    dplyr::mutate(value = as.numeric(value)) %>% # change values to numeric
+    dplyr::summarize(!!new_col_name := tally_function(value, na.rm=na.rm)) # aggregate according to tally_function
+  if(!is.null(join_function)){
+    df_tally <- df %>%
+      join_function(df_tally) # join aggregated scores with original dataframe using join_function
+  }
+  return(df_tally)
+}
+
+```
+
+## Read data
+```{r}
+codebook_filepath <- here("lib/Winter_2020_Survey_EWB_S2B_National_April_26_2021_11_30_codebook.xlsx")
+codebook_vars <- readxl::read_excel(codebook_filepath, sheet="variables")
+codebook_values <- readxl::read_excel(codebook_filepath, sheet="values") %>% 
+  mutate(old_value = str_replace_all(old_value, "\r", ""))
+
+df_file <- read_csv(here("data/raw/Winter 2020 Survey EWB - S2B (National)_April 29, 2021_16.30.csv"))
+df_raw <- df_file %>% 
+  slice(-1:-2) %>% 
+  # -- rename columns -- #
+  codebook_renamer(codebook=codebook_vars)
+
+
+
+```
+
+
+## Process data
+```{r}
+df_recoded <- df_raw %>%
+	# -- recode variables -- #
+	codebook_recoder(codebook=codebook_values)
+
+df_proc <- df_recoded %>%
+  
+  # -- remove failed attention checks -- #
+  filter(ac_1 == 1 & ac_2 == 1 & ac_3 == 1 & ac_4 == 1) %>% 
+  
+  # -- remove incompletes -- #
+  filter(Progress == "100") %>% 
+  
+  # -- remove people who took survey twice -- #
+  filter(!(pid %in% .$pid[duplicated(pid)])) %>% 
+
+  # -- tally scales -- # 
+  tally_scale("paq.*[0-9]{1,2}$", "paq") %>% 
+  tally_scale("paq_.*_dif_[0-9]{1,2}$", "paq_dif") %>% 
+  tally_scale("paq_.*_ddf_[0-9]{1,2}$", "paq_ddf") %>% 
+  tally_scale("paq_.*_eot_[0-9]{1,2}$", "paq_eot") %>% 
+  tally_scale("paq_pos_.*_[0-9]{1,2}$", "paq_pos") %>% 
+  tally_scale("paq_neg_.*_[0-9]{1,2}$", "paq_neg") %>% 
+  tally_scale("paq_neg_dif_[0-9]{1,2}$", "paq_neg_dif") %>% 
+  tally_scale("paq_neg_ddf_[0-9]{1,2}$", "paq_neg_ddf") %>% 
+  tally_scale("paq_pos_dif_[0-9]{1,2}$", "paq_pos_dif") %>% 
+  tally_scale("paq_pos_ddf_[0-9]{1,2}$", "paq_pos_ddf") %>% 
+  
+  tally_scale("sitselect_(approach|avoid)_[1-6]$", "sitselect") %>% 
+  tally_scale("sitselect_approach_[1-6]$", "sitselect_approach") %>% 
+  tally_scale("sitselect_avoid_[1-6]$", "sitselect_avoid") %>% 
+  
+  tally_scale("panas_pos_[0-9]{1,2}$", "panas_pos") %>% 
+  tally_scale("panas_neg_[0-9]{1,2}$", "panas_neg") %>% 
+  
+  tally_scale("rrs_brood_[0-9]$", "rrs_brood") %>% 
+  
+  tally_scale("ace_[0-9]$", "ace") %>% 
+    
+  # -- data types -- #
+  mutate_at(vars(nature_time), as.numeric)
+  
+```
+
+
+```{r, echo=FALSE}
+# ------ End Preprocessing ------ #
+# ----- Run all chunks above -----#
+```
+
+# Preregistration 
+## Hypotheses
+[Pre-registration](https://osf.io/t94h2) 
+
+1A. We hypothesize that nature contact will be associated with greater frequency of (i) situation selection in the form of approaching positively valenced situations, (ii) distraction, and (iii) reappraisal strategies and (iv) lesser frequency of rumination. Moreover, we hypothesize that emotion regulation strategies will be related to affective outcomes.
+
+1B. We hypothesize that frequency of distraction, reappraisal, and rumination will mediate the association of nature contact with affective outcomes.
+
+2A. We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes.
+
+2B. We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
+
+## Statistical analysis 
+Multiple regression models will test whether time with nature predicts positive affect, negative affect, and emotion regulation (reappraisal, rumination, suppression); and whether situation selection predicts time with nature; controlling for fear of COVID-19, Nature Relatedness, and age/demographic covariates. We will use model comparison procedures (i.e. LR-test and AIC/BIC) to determine whether covariates improve model fit and include them in the final model contingent on this procedure. Multiple regression analysis will also allow for us to test whether the relationship between ACE scores and perceived social status with affect is moderated by time with nature.
+
+Structural equation modeling will be used to test whether emotion regulation mediates the association of time with nature with affective outcomes. We will evaluate bootstrapped confidence intervals for indirect effects to determine significance of mediation.
+
+## Data exclusion
+
+Participants must pass 4/4 attention checks to be included.
+
+Following Leiner (2019), we will remove participants based on implausible completion times using the following procedure: "For each page, the sample’s median page completion time is divided by the individual completion time, resulting in a speed factor. A factor of 2 means that the respondent has completed a page twice as fast as the typical respondent. An average speed factor per respondent is computed after the page factors are clipped to a maximum value of 3."
+We will exclude participants who respond with an average speed factor greater than 2.
+
+Sensitivity analyses will be run to compare results with and without outliers. 
+
+
+# Initial data exploration 
+## Distributions 
+
+###  Total N
+```{r}
+df_proc %>% 
+  nrow
+df_proc %>% 
+  pull(pid) %>% 
+  unique %>% 
+  length
+```
+
+### Demographics
+
+
+#### Gender
+```{r}
+df_proc %>% 
+  group_by(gender) %>% 
+  summarize(n = n())
+```
+
+#### Age
+* TODO
+  * histogram
+  * mean + SD 
+
+#### MacArthur SES
+#### Education
+#### Income
+#### Race
+
+* Future TODO - don't worry about for now
+  * break apart multi-racial lines to get counts for each race 
+```{r}
+df_proc %>% 
+  group_by(race) %>% 
+  summarize(n = n())
+  
+```
+
+### Nature 
+
+#### Time in nature 
+"Over the last month, approximately how many HOURS PER WEEK do you consider yourself to have interacted with nature? This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc..."
+```{r}
+df_proc %>% 
+  ggplot(aes(x = nature_time)) + 
+  geom_histogram() + 
+  labs(x = "hours/week in nature", y = "count") + 
+  ggtitle("Hours/week in nature histogram")
+
+df_proc %>% 
+  ggplot(aes(x = log(nature_time))) + 
+  geom_histogram() + 
+  labs(x = "log transformed hours/week in nature", y = "count") + 
+  ggtitle("Log-transformed hours/week in nature histogram")
+```
+
+#### Frequency of nature contact 
+"About how often do you usually visit or pass through outdoor natural areas for any reason? 
+  
+This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc..." 
+```{r}
+
+```
+
+#### Nature setting
+"Which option best describes where, in the past month, most of your nature exposure took place? If you spent time in multiple nature areas, please pick the option where you spent the most time." 
+```{r}
+
+```
+
+#### Perceived exertion in nature
+"Please rate your perception of exertion, i.e. how heavy and strenuous the exercise felt to you and how tired you were, when you were in the natural area during which you spent the most time in the past month. The perception of exertion is mainly felt as strain and fatigue in your muscles and as breathlessness or aches in the chest.
+
+Use this scale from 6 to 20, where 6 means “No exertion at all” and 20
+means “Maximal exertion.”"
+```{r}
+
+```
+
+
+### Emotion regulation 
+
+#### Situation selection/modification frequency (Webb + PMERQ)
+```{r}
+
+```
+
+#### Distraction frequency
+```{r}
+
+```
+
+#### Rumination frequency 
+```{r}
+
+```
+
+#### Reappraisal frequency (reconstrual + repurposing)
+```{r}
+
+```
+
+
+### Affective outcomes 
+
+#### Flourishing
+```{r}
+
+```
+
+#### Perceived Stress
+```{r}
+
+```
+
+#### Positive affect (PANAS)
+```{r}
+
+```
+
+#### Negative affect (PANAS)
+```{r}
+
+```
+
+### Other variables
+
+#### Alexithymia (PAQ + TAS)
+```{r}
+
+```
+
+
+#### Fear of coronavirus
+```{r}
+
+```
+
+#### Social desiribility
+```{r}
+
+```
+
+
+## Confirmatory analysis
+
+### 1a: Nature contact and ER frequency 
+We hypothesize that nature contact will be associated with greater frequency of (i) situation selection in the form of approaching positively valenced situations, (ii) distraction, and (iii) reappraisal strategies and (iv) lesser frequency of rumination. Moreover, we hypothesize that emotion regulation strategies will be related to affective outcomes. 
+
+#### Nature time <-> situation selection approach pos
+```{r}
+cor.test(df_proc$nature_time, df_proc$sitselect_approach, )
+
+df_proc %>% 
+  ggplot(aes(x = sitselect_approach, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+```
+#### Nature time <-> distraction
+#### Nature time <-> reappraisal
+#### Nature time <-> rumination
+#### Nature time <-> flourishing
+#### Nature time <-> perceived stress
+#### Nature time <-> positive affect
+#### Nature time <-> negative affect
+
+### 1b: Nature exposure -> ER -> affect 
+We hypothesize that frequency of distraction, reappraisal, and rumination will mediate the association of nature contact with affective outcomes.
+
+#### Nature time -> Rumination -> Negative affect
+```{r}
+# Step 1: Check for total effect
+df_proc %>% 
+  lm(rrs_brood ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = rrs_brood)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
+
+# If Step 1 is significant, continue to Step 2...
+
+# Step 2: Conduct mediation analysis
+mod <- '
+rrs_brood ~ a*nature_time
+panas_neg ~ b*rrs_brood + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% as.data.frame
+```
+
+**Fill out rest of headings and sections**
+
+### 2a: Nature contact moderates association of adverse experience and affect 
+We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes.
+
+#### Nature time x Adverse childhood experiences -> Negative affect
+```{r}
+df_proc %>% 
+  lm(panas_neg ~ nature_time * ace, .) %>% 
+  summary
+```
+
+**Fill out rest of headings and sections**
+
+### 2b: Moderations mediated by reappraisal and rumination 
+We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
+**We can wait on this section for now**
+```{r}
+
+```
+
+
+
+
+# Session Info
+```{r}
+sessionInfo()
+```
+
