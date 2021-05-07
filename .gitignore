@@ -5,3 +5,5 @@ box/
 data/
 *.html
 .Rproj.user
+
+!*/README.md
