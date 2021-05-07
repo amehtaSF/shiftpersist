@@ -1,5 +1,5 @@
 ---
-title: "National Qualtrics Study"
+title: "Nature ER National Qualtrics Study"
 author: "Ashish"
 date: "4/26/2021"
 output: rmdformats::readthedown
@@ -222,7 +222,10 @@ df_proc %>%
 ### Nature 
 
 #### Time in nature 
-"Over the last month, approximately how many HOURS PER WEEK do you consider yourself to have interacted with nature? This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc..."
+> Over the last month, approximately how many HOURS PER WEEK do you consider yourself to have interacted with nature? This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc...
+
+* Highly skewed distribution
+
 ```{r}
 df_proc %>% 
   ggplot(aes(x = nature_time)) + 
@@ -238,24 +241,23 @@ df_proc %>%
 ```
 
 #### Frequency of nature contact 
-"About how often do you usually visit or pass through outdoor natural areas for any reason? 
-  
-This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc..." 
+> About how often do you usually visit or pass through outdoor natural areas for any reason? This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc...
+
 ```{r}
 
 ```
 
 #### Nature setting
-"Which option best describes where, in the past month, most of your nature exposure took place? If you spent time in multiple nature areas, please pick the option where you spent the most time." 
+> Which option best describes where, in the past month, most of your nature exposure took place? If you spent time in multiple nature areas, please pick the option where you spent the most time. 
+
 ```{r}
 
 ```
 
 #### Perceived exertion in nature
-"Please rate your perception of exertion, i.e. how heavy and strenuous the exercise felt to you and how tired you were, when you were in the natural area during which you spent the most time in the past month. The perception of exertion is mainly felt as strain and fatigue in your muscles and as breathlessness or aches in the chest.
+> Please rate your perception of exertion, i.e. how heavy and strenuous the exercise felt to you and how tired you were, when you were in the natural area during which you spent the most time in the past month. The perception of exertion is mainly felt as strain and fatigue in your muscles and as breathlessness or aches in the chest. Use this scale from 6 to 20, where 6 means “No exertion at all” and 20
+means “Maximal exertion.”
 
-Use this scale from 6 to 20, where 6 means “No exertion at all” and 20
-means “Maximal exertion.”"
 ```{r}
 
 ```
@@ -325,29 +327,31 @@ means “Maximal exertion.”"
 ```
 
 
-## Confirmatory analysis
+# Confirmatory analysis
 
-### 1a: Nature contact and ER frequency 
+## 1a: Nature contact and ER frequency 
 We hypothesize that nature contact will be associated with greater frequency of (i) situation selection in the form of approaching positively valenced situations, (ii) distraction, and (iii) reappraisal strategies and (iv) lesser frequency of rumination. Moreover, we hypothesize that emotion regulation strategies will be related to affective outcomes. 
 
-#### Nature time <-> situation selection approach pos
+### Nature time <-> situation selection approach pos
+* Significant association
+* Heteroscedasticity 
 ```{r}
-cor.test(df_proc$nature_time, df_proc$sitselect_approach, )
+cor.test(df_proc$nature_time, df_proc$sitselect_approach)
 
 df_proc %>% 
   ggplot(aes(x = sitselect_approach, y = nature_time)) + 
   geom_point() + 
   geom_smooth(method = "lm")
 ```
-#### Nature time <-> distraction
-#### Nature time <-> reappraisal
-#### Nature time <-> rumination
-#### Nature time <-> flourishing
-#### Nature time <-> perceived stress
-#### Nature time <-> positive affect
-#### Nature time <-> negative affect
+### Nature time <-> distraction 
+### Nature time <-> reappraisal 
+### Nature time <-> rumination 
+### Nature time <-> flourishing 
+### Nature time <-> perceived stress 
+### Nature time <-> positive affect 
+### Nature time <-> negative affect 
 
-### 1b: Nature exposure -> ER -> affect 
+## 1b: Nature exposure -> ER -> affect 
 We hypothesize that frequency of distraction, reappraisal, and rumination will mediate the association of nature contact with affective outcomes.
 
 #### Nature time -> Rumination -> Negative affect
@@ -387,12 +391,15 @@ parameterEstimates(
   level=0.95,
   ci=TRUE,
   standardized = TRUE
-) %>% as.data.frame
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
 ```
 
 **Fill out rest of headings and sections**
 
-### 2a: Nature contact moderates association of adverse experience and affect 
+## 2a: Nature contact moderates association of adverse experience and affect 
 We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes.
 
 #### Nature time x Adverse childhood experiences -> Negative affect
@@ -404,7 +411,7 @@ df_proc %>%
 
 **Fill out rest of headings and sections**
 
-### 2b: Moderations mediated by reappraisal and rumination 
+## 2b: Moderations mediated by reappraisal and rumination 
 We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
 **We can wait on this section for now**
 ```{r}
