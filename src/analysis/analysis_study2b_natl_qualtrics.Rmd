@@ -6,9 +6,10 @@ output: rmdformats::readthedown
 ---
 
 # Notes
-## TODO
+## TODO (for Ashish)
 * Need to figure out how to deal with heteroscedasticity for time in nature. E.g. in mediation models
   * Lim & Melville. (2009). Robustness of Structural Equation Modeling to Distributional Misspecification: Empirical Evidence & Research Guidelines 
+* Mediated moderation
 
 # Initialization
 ```{r, message=FALSE}
@@ -23,8 +24,8 @@ require(rmdformats)
 theme_set(theme_bw())
 ```
 
-# Preprocessing
-## Functions
+# Preprocessing 
+## Functions 
 ```{r}
 codebook_renamer <- function(df, codebook, old_col_name="old_col_name", new_col_name="new_col_name"){
   codebook <- codebook %>%
@@ -57,13 +58,21 @@ codebook_recoder <- function(df, codebook, var_col_name="var_regex"){
   }
   return(df)
 }
-tally_scale <- function(df, scale_regex, new_col_name=NULL, pid_col="pid", join_function=dplyr::full_join, na.rm=F, tally_function=sum){
+tally_scale <- function(df, 
+                        scale_regex, 
+                        new_col_name=NULL, 
+                        pid_col="pid", 
+                        join_function=dplyr::full_join, 
+                        na.rm=F, 
+                        tally_function=sum){
   # if user did not supply a new column name, use the scale_regex
   if(is.null(new_col_name)) new_col_name <- scale_regex 
+  # check is there are duplicate participant IDs
   if(any(duplicated(df[[pid_col]]))){stop("Duplicate IDs found")}
-  # append ^ to start of regex
+  # append caret to start of regex
   scale_regex <- paste0("^", scale_regex) 
-  cols_to_tally <- names(df)[str_detect(names(df), scale_regex)] # identify columns to aggregate
+  # identify columns to tally
+  cols_to_tally <- names(df)[str_detect(names(df), scale_regex)] 
   print(paste0("[",new_col_name, "] tallying columns:"))
   print(cols_to_tally)
   df_tally <- df %>% 
@@ -95,11 +104,17 @@ df_raw <- df_file %>%
   codebook_renamer(codebook=codebook_vars)
 
 
+```
 
+## Constants
+```{r}
+columns_to_numeric <- c("nature_time", "age")
 ```
 
 
 ## Process data
+TODO: 
+* The tally_scale() function takes
 ```{r}
 df_recoded <- df_raw %>%
 	# -- recode variables -- #
@@ -128,6 +143,9 @@ df_proc <- df_recoded %>%
   tally_scale("paq_pos_dif_[0-9]{1,2}$", "paq_pos_dif") %>% 
   tally_scale("paq_pos_ddf_[0-9]{1,2}$", "paq_pos_ddf") %>% 
   
+  tally_scale("pmerq_(recons|repurp)_.*_[0-9]{1,2}$", "pmerq_reappraise") %>% 
+  tally_scale("pmerq_attdep_.*_[0-9]{1,2}$", "pmerq_attdep") %>% 
+  
   tally_scale("sitselect_(approach|avoid)_[1-6]$", "sitselect") %>% 
   tally_scale("sitselect_approach_[1-6]$", "sitselect_approach") %>% 
   tally_scale("sitselect_avoid_[1-6]$", "sitselect_avoid") %>% 
@@ -140,8 +158,24 @@ df_proc <- df_recoded %>%
   tally_scale("ace_[0-9]$", "ace") %>% 
     
   # -- data types -- #
-  mutate_at(vars(nature_time), as.numeric)
-  
+  mutate_at(vars(one_of(columns_to_numeric)), as.numeric) %>% 
+  # -- re-order factors -- #
+  mutate(edu = factor(edu, levels = c( 
+    "Less than high school degree",
+    "High school graduate (high school diploma or equivalent including GED)",
+    "Some college but no degree",
+    "Associate degree in college (2-year)",
+    "Bachelor's degree in college (4-year)",
+    "Master's degree",
+    "Professional degree (JD, MD)",
+    "Doctoral degree"
+  ))) %>% 
+  # -- discretizing continuous variables for visualizations -- #
+  mutate(high_ace = case_when(ace <= 4 ~ "1", ace > 4 ~ "0")) %>% 
+  mutate(high_macarthur_us_rung = case_when(macarthur_us_rung <= median(macarthur_us_rung) ~ "1",
+                                            macarthur_us_rung > median(macarthur_us_rung) ~ "0")) %>% 
+  mutate(high_macarthur_comm_rung = case_when(macarthur_comm_rung <= median(macarthur_comm_rung) ~ "1",
+                                              macarthur_comm_rung > median(macarthur_comm_rung) ~ "0"))
 ```
 
 
@@ -163,6 +197,7 @@ df_proc <- df_recoded %>%
 2B. We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
 
 ## Statistical analysis 
+
 Multiple regression models will test whether time with nature predicts positive affect, negative affect, and emotion regulation (reappraisal, rumination, suppression); and whether situation selection predicts time with nature; controlling for fear of COVID-19, Nature Relatedness, and age/demographic covariates. We will use model comparison procedures (i.e. LR-test and AIC/BIC) to determine whether covariates improve model fit and include them in the final model contingent on this procedure. Multiple regression analysis will also allow for us to test whether the relationship between ACE scores and perceived social status with affect is moderated by time with nature.
 
 Structural equation modeling will be used to test whether emotion regulation mediates the association of time with nature with affective outcomes. We will evaluate bootstrapped confidence intervals for indirect effects to determine significance of mediation.
@@ -178,6 +213,7 @@ Sensitivity analyses will be run to compare results with and without outliers.
 
 
 # Initial data exploration 
+
 ## Distributions 
 
 ###  Total N
@@ -192,7 +228,6 @@ df_proc %>%
 
 ### Demographics
 
-
 #### Gender
 ```{r}
 df_proc %>% 
@@ -201,16 +236,48 @@ df_proc %>%
 ```
 
 #### Age
-* TODO
-  * histogram
-  * mean + SD 
+* This is why it's so important to get to know your data. See anything odd? :)
+```{r}
+df_proc %>% 
+  ggplot(aes(x = age)) + 
+  geom_histogram() + 
+  labs(x = "Age", y = "count") + 
+  ggtitle("Age histogram")
 
-#### MacArthur SES
+# Get mean age and standard deviation
+df_proc %>% 
+  summarize(mean_age = mean(age, na.rm = T),
+            sd_age = sd(age, na.rm = T))
+
+```
+
+TODO: 
+* Create a histogram for each the two Macarthur social status measures
+* Create a bar
+#### MacArthur status
+```{r}
+
+```
+
 #### Education
-#### Income
-#### Race
+```{r}
+df_proc %>% 
+  ggplot(aes(x = edu)) + 
+  geom_bar() +
+  labs(x = "Education", y = "count") +
+  coord_flip() # rotate the plot
+```
 
-* Future TODO - don't worry about for now
+#### Income
+TODO: 
+* Re-order the income bracket categories in the preprocessing script above (see example with education)
+* Create bar plot (see example with education)
+```{r}
+
+```
+
+#### Race
+* Future TODO - (don't worry about for now)
   * break apart multi-racial lines to get counts for each race 
 ```{r}
 df_proc %>% 
@@ -218,6 +285,12 @@ df_proc %>%
   summarize(n = n())
   
 ```
+
+TODO:
+* Create histograms for continuous variables
+  * e.g. time in nature, perceived exertion
+* Create barplots for the categorical variables, reordering the factors when needed 
+  * e.g. frequency of nature contact, nature setting
 
 ### Nature 
 
@@ -227,17 +300,18 @@ df_proc %>%
 * Highly skewed distribution
 
 ```{r}
+
 df_proc %>% 
   ggplot(aes(x = nature_time)) + 
   geom_histogram() + 
   labs(x = "hours/week in nature", y = "count") + 
   ggtitle("Hours/week in nature histogram")
 
-df_proc %>% 
-  ggplot(aes(x = log(nature_time))) + 
-  geom_histogram() + 
-  labs(x = "log transformed hours/week in nature", y = "count") + 
-  ggtitle("Log-transformed hours/week in nature histogram")
+# df_proc %>% 
+#   ggplot(aes(x = log(nature_time))) + 
+#   geom_histogram() + 
+#   labs(x = "log transformed hours/week in nature", y = "count") + 
+#   ggtitle("Log-transformed hours/week in nature histogram")
 ```
 
 #### Frequency of nature contact 
@@ -263,24 +337,70 @@ means “Maximal exertion.”
 ```
 
 
+TODO:
+* tally scales for relevant variables in preprocessing script above
+* create histograms for each variable
+
 ### Emotion regulation 
 
-#### Situation selection/modification frequency (Webb + PMERQ)
+#### Situation selection frequency 
+Vars: 
+* sitselect 
+* sitselect_approach 
+* sitselect_avoid 
+* pmerq_sitsel_eng 
+* pmerq_sitsel_dis 
+```{r}
+
+```
+
+#### Situation modification frequency
+Vars: 
+* pmerq_sitmod_eng 
+* pmerq_sitmod_dis 
 ```{r}
 
 ```
 
 #### Distraction frequency
+Vars: 
+* pmerq_attdep 
+* pmerq_attdep_eng 
+* pmerq_attdep_dis 
 ```{r}
 
 ```
 
 #### Rumination frequency 
+Vars: 
+* rrs_brood 
 ```{r}
 
 ```
 
-#### Reappraisal frequency (reconstrual + repurposing)
+#### Reappraisal frequency 
+Vars:
+* pmerq_reappraise (this variable is not in the codebook, but I already made it in the preprocessing script)
+* pmerq_recons 
+* pmerq_recons_eng
+* pmerq_recons_dis
+* pmerq_repurp 
+* pmerq_repurp_eng  
+* pmerq_repurp_dis 
+```{r}
+
+```
+
+#### Suppression frequency 
+Vars:
+* pmerq_respmod_dis 
+```{r}
+
+```
+
+#### Social support frequency 
+Vars:
+* pmerq_respmod_eng  
 ```{r}
 
 ```
@@ -288,40 +408,77 @@ means “Maximal exertion.”
 
 ### Affective outcomes 
 
-#### Flourishing
+#### Flourishing 
+Vars:
+* fm
 ```{r}
 
 ```
 
-#### Perceived Stress
+#### Satisfaction with life 
+Vars:
+* swl 
 ```{r}
 
 ```
 
 #### Positive affect (PANAS)
+Vars: 
+* panas_pos 
 ```{r}
 
 ```
 
-#### Negative affect (PANAS)
+#### Negative affect (PANAS) 
+Vars: 
+* panas_neg 
 ```{r}
 
 ```
+
+#### Perceived Stress 
+Vars:
+* pss 
+```{r}
+
+```
+
 
 ### Other variables
 
-#### Alexithymia (PAQ + TAS)
+#### Alexithymia PAQ 
+Vars: 
+* paq 
+* paq_dif 
+* paq_ddf 
+* paq_eot 
+* paq_pos 
+* paq_neg 
+```{r}
+
+```
+
+#### Alexithymia TAS 
+Vars: 
+* tas 
+* tas_dif 
+* tas_ddf 
+* tas_eot
 ```{r}
 
 ```
 
 
-#### Fear of coronavirus
+#### Fear of coronavirus 
+Vars: 
+* fcv 
 ```{r}
 
 ```
 
-#### Social desiribility
+#### Social desiribility 
+Vars: 
+* sds 
 ```{r}
 
 ```
@@ -333,6 +490,7 @@ means “Maximal exertion.”
 We hypothesize that nature contact will be associated with greater frequency of (i) situation selection in the form of approaching positively valenced situations, (ii) distraction, and (iii) reappraisal strategies and (iv) lesser frequency of rumination. Moreover, we hypothesize that emotion regulation strategies will be related to affective outcomes. 
 
 ### Nature time <-> situation selection approach pos
+Results 
 * Significant association
 * Heteroscedasticity 
 ```{r}
@@ -343,13 +501,45 @@ df_proc %>%
   geom_point() + 
   geom_smooth(method = "lm")
 ```
+
+TODO:
+* Conduct the following bivariate correlations following the template above 
+
 ### Nature time <-> distraction 
+```{r}
+
+```
+
 ### Nature time <-> reappraisal 
+```{r}
+
+```
+
 ### Nature time <-> rumination 
+```{r}
+
+```
+
 ### Nature time <-> flourishing 
+```{r}
+
+```
+
 ### Nature time <-> perceived stress 
+```{r}
+
+```
+
 ### Nature time <-> positive affect 
+```{r}
+
+```
+
 ### Nature time <-> negative affect 
+```{r}
+
+```
+
 
 ## 1b: Nature exposure -> ER -> affect 
 We hypothesize that frequency of distraction, reappraisal, and rumination will mediate the association of nature contact with affective outcomes.
@@ -397,26 +587,124 @@ parameterEstimates(
   select(-std.lv, -std.nox)
 ```
 
-**Fill out rest of headings and sections**
+TODO: 
+* Conduct mediations following the template above 
+  * In the first slot, you can always use nature_time
+  * In the second position, you can use rrs_brood, pmerq_attdep_dis, pmerq_reappraise
+  * In the third position, you can use panas_pos, panas_neg, fm, pss, swl
+* (I didn't add the code chunks or headlines this time--you can add them. By running all possible combinations, we should end up with 15 code chunks.)
+
+
 
 ## 2a: Nature contact moderates association of adverse experience and affect 
-We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes.
+We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes. 
 
-#### Nature time x Adverse childhood experiences -> Negative affect
+
+TODO: 
+* Conduct moderation analyses using the templates 
+
+#### Nature time x adverse childhood experiences -> Positive affect 
+```{r}
+
+```
+
+#### Nature time x adverse childhood experiences -> Flourishing 
+```{r}
+
+```
+
+#### Nature time x adverse childhood experiences -> Satisfaction with life  
+```{r}
+
+```
+
+#### Nature time x adverse childhood experiences -> Negative affect 
 ```{r}
 df_proc %>% 
   lm(panas_neg ~ nature_time * ace, .) %>% 
   summary
+df_proc %>% 
+  lm(panas_neg ~ nature_time * high_ace, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = panas_neg, color = high_ace)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Negative affect (PANAS-neg)", color = "High ACE") 
 ```
 
-**Fill out rest of headings and sections**
+
+#### Nature time x adverse childhood experiences -> Perceived stress 
+```{r}
+
+```
+
+#### Nature time x Macarthur US rung -> Positive affect
+```{r}
+df_proc %>% 
+  lm(panas_neg ~ nature_time * macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(panas_neg ~ nature_time * high_macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = panas_neg, color = high_macarthur_us_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High Macarthur US status") 
+```
+
+#### Nature time x Macarthur US rung -> Flourishing 
+```{r}
+
+```
+
+#### Nature time x Macarthur US rung -> Satisfaction with life  
+```{r}
+
+```
+
+#### Nature time x Macarthur US rung -> Negative affect   
+```{r}
+
+```
+
+#### Nature time x Macarthur US rung -> Perceived stress 
+```{r}
+
+```
+
+#### Nature time x Macarthur Community rung -> Positive affect
+```{r}
+
+```
+
+#### Nature time x Macarthur Community rung -> Flourishing 
+```{r}
+
+```
+
+#### Nature time x Macarthur Community rung -> Satisfaction with life  
+```{r}
+
+```
+
+#### Nature time x Macarthur Community rung -> Negative affect   
+```{r}
+
+```
+
+#### Nature time x Macarthur Community rung -> Perceived stress 
+```{r}
+
+```
+
+
 
 ## 2b: Moderations mediated by reappraisal and rumination 
 We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
 **We can wait on this section for now**
-```{r}
 
-```
 
 
 
