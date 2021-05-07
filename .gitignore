@@ -1,3 +1,6 @@
+
+!**/README.md
+
 .Rhistory
 .DS_Store
 box/
@@ -5,6 +8,3 @@ box/
 data/
 *.html
 .Rproj.user
-
-!data/raw/README.md
-!data/proc/README.md
