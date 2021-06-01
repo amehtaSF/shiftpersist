@@ -16,7 +16,6 @@ output: rmdformats::readthedown
 rm(list=ls())
 library(lavaan)
 library(lmerTest)
-
 library(here)
 library(tidyverse)
 library(tidylog)
@@ -97,7 +96,7 @@ codebook_vars <- readxl::read_excel(codebook_filepath, sheet="variables")
 codebook_values <- readxl::read_excel(codebook_filepath, sheet="values") %>% 
   mutate(old_value = str_replace_all(old_value, "\r", ""))
 
-df_file <- read_csv(here("data/raw/Winter 2020 Survey EWB - S2B (National)_April 29, 2021_16.30.csv"))
+df_file <- readxl::read_excel(here("data/raw/FINAL - National Study 2B.xlsx")) 
 df_raw <- df_file %>% 
   slice(-1:-2) %>% 
   # -- rename columns -- #
@@ -123,14 +122,22 @@ df_recoded <- df_raw %>%
 df_proc <- df_recoded %>%
   
   # -- remove failed attention checks -- #
-  filter(ac_1 == 1 & ac_2 == 1 & ac_3 == 1 & ac_4 == 1) %>% 
+  filter(ac_1 == 1 & ac_2 == 1 & ac_3 == 1) %>% 
   
-  # -- remove incompletes -- #
-  filter(Progress == "100") %>% 
-  
-  # -- remove people who took survey twice -- #
-  filter(!(pid %in% .$pid[duplicated(pid)])) %>% 
+  # -- create pids -- #
+  mutate(pid = seq(from = 1000, length.out = n())) %>%
 
+  # -- revalue invalid age, e.g. age = 2000 becomes age = 21 -- #
+  mutate(age = as.numeric(age))%>%
+  mutate(age = ifelse(age > 1000, 2021-age, age)) %>%
+  
+  # -- assign NA to people who don't report income -- #
+  mutate(income = ifelse(income == "Prefer not to say", NA, income)) %>%
+
+  # -- create log transformed nature time -- #
+  mutate(nature_time = as.numeric(nature_time)) %>%
+  mutate(nature_time_log = ifelse(nature_time == 0, nature_time, log(nature_time))) %>%
+  
   # -- tally scales -- # 
   tally_scale("paq.*[0-9]{1,2}$", "paq") %>% 
   tally_scale("paq_.*_dif_[0-9]{1,2}$", "paq_dif") %>% 
@@ -149,14 +156,39 @@ df_proc <- df_recoded %>%
   tally_scale("sitselect_(approach|avoid)_[1-6]$", "sitselect") %>% 
   tally_scale("sitselect_approach_[1-6]$", "sitselect_approach") %>% 
   tally_scale("sitselect_avoid_[1-6]$", "sitselect_avoid") %>% 
+  tally_scale("pmerq_sitsel_dis_[0-9]{1,2}$", "pmerq_sitsel_dis") %>%
+  tally_scale("pmerq_sitsel_eng_[0-9]{1,2}$", "pmerq_sitsel_eng") %>%
+  tally_scale("pmerq_sitmod_eng_[0-9]{1,2}$", "pmerq_sitmod_eng") %>%
+  tally_scale("pmerq_sitmod_dis_[0-9]{1,2}$", "pmerq_sitmod_dis") %>%
+  tally_scale("pmerq_attdep_eng_[0-9]{1,2}$", "pmerq_attdep_eng") %>%
+  tally_scale("pmerq_attdep_dis_[0-9]{1,2}$", "pmerq_attdep_dis") %>%
+  tally_scale("pmerq_recons_eng_[0-9]{1,2}$", "pmerq_recons_eng") %>%
+  tally_scale("pmerq_recons_dis_[0-9]{1,2}$", "pmerq_recons_dis") %>%
+  tally_scale("pmerq_recons_(dis|eng)_[0-9]{1,2}$", "pmerq_recons") %>%
+  tally_scale("pmerq_repurp_eng_[0-9]{1,2}$", "pmerq_repurp_eng") %>%
+  tally_scale("pmerq_repurp_dis_[0-9]{1,2}$", "pmerq_repurp_dis") %>%
+  tally_scale("pmerq_repurp_(eng|dis)_[0-9]{1,2}$", "pmerq_repurp") %>%
+  tally_scale("pmerq_respmod_dis_[0-9]{1,2}$", "pmerq_respmod_dis") %>%
+  tally_scale("pmerq_respmod_eng_[0-9]{1,2}$", "pmerq_respmod_eng") %>%
+
+  tally_scale("fm_[0-9]{1,2}$", "fm") %>%
+  tally_scale("swl_[1-5]$", "swl") %>%
+  tally_scale("pss_", "pss") %>%
+  tally_scale("fcv_[1-7]$", "fcv") %>%
+  tally_scale("sds_", "sds") %>%
+
+  tally_scale("panas_pos_[0-9]{1,2}$", "panas_pos") %>%
+  tally_scale("panas_neg_[0-9]{1,2}$", "panas_neg") %>%
+
+  tally_scale("rrs_brood_[0-9]$", "rrs_brood") %>%
   
-  tally_scale("panas_pos_[0-9]{1,2}$", "panas_pos") %>% 
-  tally_scale("panas_neg_[0-9]{1,2}$", "panas_neg") %>% 
-  
-  tally_scale("rrs_brood_[0-9]$", "rrs_brood") %>% 
+  tally_scale("tas_", "tas") %>%
+  tally_scale("tas_dif_[0-9]{1,2}$", "tas_dif") %>%
+  tally_scale("tas_ddf_[0-9]{1,2}$", "tas_ddf") %>%
+  tally_scale("tas_eot_[0-9]{1,2}$", "tas_eot") %>%
   
   tally_scale("ace_[0-9]$", "ace") %>% 
-    
+  
   # -- data types -- #
   mutate_at(vars(one_of(columns_to_numeric)), as.numeric) %>% 
   # -- re-order factors -- #
@@ -170,6 +202,37 @@ df_proc <- df_recoded %>%
     "Professional degree (JD, MD)",
     "Doctoral degree"
   ))) %>% 
+  
+  mutate(income = factor(income, levels = c(
+    "Less than $10,000",
+    "$10,000 to $19,999",
+    "$20,000 to $29,999",
+    "$30,000 to $39,999",
+    "$40,000 to $49,999",
+    "$50,000 to $59,999",
+    "$60,000 to $69,999",
+    "$70,000 to $79,999",
+    "$80,000 to $89,999",
+    "$90,000 to $99,999",
+    "$100,000 to $149,999",
+    "$150,000 to $199,999",
+    "$200,000 to $249,999",
+    "$250,000 to $299,999",
+    "$300,000 or more"
+  ))) %>%
+  
+  mutate(nature_freq = factor(nature_freq, levels = c(
+  "Never",
+  "Once a year",
+  "Once every three months",
+  "Once a month",
+  "2-3 times a month",
+  "Once a week",
+  "2-3 days a week",
+  "3-5 days a week",
+  "6-7 days a week"
+  ))) %>%
+  
   # -- discretizing continuous variables for visualizations -- #
   mutate(high_ace = case_when(ace <= 4 ~ "1", ace > 4 ~ "0")) %>% 
   mutate(high_macarthur_us_rung = case_when(macarthur_us_rung <= median(macarthur_us_rung) ~ "1",
@@ -240,7 +303,7 @@ df_proc %>%
 ```{r}
 df_proc %>% 
   ggplot(aes(x = age)) + 
-  geom_histogram() + 
+  geom_histogram(binwidth = 10) + 
   labs(x = "Age", y = "count") + 
   ggtitle("Age histogram")
 
@@ -253,10 +316,21 @@ df_proc %>%
 
 TODO: 
 * Create a histogram for each the two Macarthur social status measures
-* Create a bar
 #### MacArthur status
 ```{r}
+# MacArthur US histogram
+df_proc %>%
+  ggplot(aes(x=macarthur_us_rung))+
+  geom_histogram(binwidth = 1) +
+  labs(x = "MacArthur Rung US", y = "count") +
+  ggtitle("MacArthur Rung US histogram")
 
+# MacArthur community histogram
+df_proc %>%
+  ggplot(aes(x=macarthur_comm_rung))+
+  geom_histogram(binwidth = 1) +
+  labs(x = "MacArthur Rung Community", y = "count") +
+  ggtitle("MacArthur Rung Community histogram")
 ```
 
 #### Education
@@ -273,7 +347,11 @@ TODO:
 * Re-order the income bracket categories in the preprocessing script above (see example with education)
 * Create bar plot (see example with education)
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = income)) + 
+  geom_bar() + 
+  labs(x = "Income", y = "count") +
+  coord_flip()
 ```
 
 #### Race
@@ -303,29 +381,39 @@ TODO:
 
 df_proc %>% 
   ggplot(aes(x = nature_time)) + 
-  geom_histogram() + 
+  geom_histogram(binwidth = 5) + 
   labs(x = "hours/week in nature", y = "count") + 
   ggtitle("Hours/week in nature histogram")
 
-# df_proc %>% 
-#   ggplot(aes(x = log(nature_time))) + 
-#   geom_histogram() + 
-#   labs(x = "log transformed hours/week in nature", y = "count") + 
-#   ggtitle("Log-transformed hours/week in nature histogram")
+df_proc %>% 
+  ggplot(aes(x = nature_time_log)) + 
+  geom_histogram(binwidth = 0.5) +
+  labs(x = "log transformed hours/week in nature", y = "count") + 
+  ggtitle("Log-transformed hours/week in nature histogram")
 ```
 
-#### Frequency of nature contact 
+#### Frequency of nature contact
 > About how often do you usually visit or pass through outdoor natural areas for any reason? This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc...
 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = nature_freq)) + 
+  geom_bar() +
+  labs(x = "frequency of nature contact", y = "count") +
+  ggtitle("Frequency of nature contact histogram") +
+  coord_flip()
 ```
 
 #### Nature setting
 > Which option best describes where, in the past month, most of your nature exposure took place? If you spent time in multiple nature areas, please pick the option where you spent the most time. 
 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = nature_setting)) +
+  geom_bar() +
+  labs(x = "nature setting", y = "count") +
+  ggtitle("Nature setting histogram") +
+  coord_flip()
 ```
 
 #### Perceived exertion in nature
@@ -333,7 +421,11 @@ df_proc %>%
 means “Maximal exertion.”
 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = perceived_exertion)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "perceived exertion", y = "count") +
+  ggtitle("Perceived exertion in nature histogram")
 ```
 
 
@@ -345,13 +437,44 @@ TODO:
 
 #### Situation selection frequency 
 Vars: 
-* sitselect 
+* sitselect
 * sitselect_approach 
 * sitselect_avoid 
-* pmerq_sitsel_eng 
-* pmerq_sitsel_dis 
+* pmerq_sitsel_eng
+* pmerq_sitsel_dis
 ```{r}
 
+# Note: not recoding properly -- odd values not captured, but codebook and data seem to match
+
+# df_proc %>%
+#   ggplot(aes(x = sitselect)) +
+#   geom_histogram(binwidth = 1) +
+#   labs(x = "situation selection", y = "count") +
+#   ggtitle("Situation selection histogram")
+# 
+# df_proc %>%
+#   ggplot(aes(x = sitselect_approach)) +
+#   geom_histogram(binwidth = 1) +
+#   labs(x = "situation selection approach", y = "count") +
+#   ggtitle("Situation selection approach histogram")
+# 
+#   df_proc %>%
+#   ggplot(aes(x = sitselect_avoid)) +
+#   geom_histogram(binwidth = 1) +
+#   labs(x = "situation selection avoid", y = "count") +
+#   ggtitle("Situation selection avoid histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_sitsel_eng)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ situation selection engagement", y = "count") +
+  ggtitle("PMERQ situation selection engagement histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_sitsel_dis)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ situation selection disengagement", y = "count") +
+  ggtitle("PMERQ situation selection disengagement histogram")
 ```
 
 #### Situation modification frequency
@@ -359,7 +482,17 @@ Vars:
 * pmerq_sitmod_eng 
 * pmerq_sitmod_dis 
 ```{r}
+df_proc %>%
+  ggplot(aes(x = pmerq_sitmod_eng)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ situation modification engagement", y = "count") +
+  ggtitle("PMERQ situation modification engagement histogram")
 
+df_proc %>%
+  ggplot(aes(x = pmerq_sitmod_dis)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ situation modification disengagement", y = "count") +
+  ggtitle("PMERQ situation modification disengagement histogram")
 ```
 
 #### Distraction frequency
@@ -368,14 +501,34 @@ Vars:
 * pmerq_attdep_eng 
 * pmerq_attdep_dis 
 ```{r}
+df_proc %>%
+  ggplot(aes(x = pmerq_attdep)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ attention deployment", y = "count") +
+  ggtitle("PMERQ attention deployment histogram")
 
+df_proc %>%
+  ggplot(aes(x = pmerq_attdep_eng)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ attention deployment engagement", y = "count") +
+  ggtitle("PMERQ attention deployment engagement histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_attdep_dis)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ attention deployment disengagement", y = "count") +
+  ggtitle("PMERQ attention deployment disengagement histogram")
 ```
 
 #### Rumination frequency 
 Vars: 
 * rrs_brood 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = rrs_brood)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "ruminative response brooding", y = "count") +
+  ggtitle("Brooding (Rumination Reponse Scale) histogram")
 ```
 
 #### Reappraisal frequency 
@@ -388,21 +541,69 @@ Vars:
 * pmerq_repurp_eng  
 * pmerq_repurp_dis 
 ```{r}
+df_proc %>%
+  ggplot(aes(x = pmerq_reappraise)) +
+  geom_histogram(binwidth = 5) +
+  labs(x = "PMERQ reappraisal", y = "count") +
+  ggtitle("PMERQ reappraisal histogram")
 
+df_proc %>%
+  ggplot(aes(x = pmerq_recons)) +
+  geom_histogram(binwidth = 2) +
+  labs(x = "PMERQ reconstrual", y = "count") +
+  ggtitle("PMERQ reconstrual histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_recons_eng)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ reconstrual engagement", y = "count") +
+  ggtitle("PMERQ reconstrual engagement histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_recons_dis)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ reconstrual disengagement", y = "count") +
+  ggtitle("PMERQ reconstrual disengagement histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_repurp)) +
+  geom_histogram(binwidth = 2) +
+  labs(x = "PMERQ repurposing", y = "count") +
+  ggtitle("PMERQ repurposing histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_repurp_eng)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ repurposing engagement", y = "count") +
+  ggtitle("PMERQ repurposing engagement histogram")
+
+df_proc %>%
+  ggplot(aes(x = pmerq_repurp_dis)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ repurposing disengagement", y = "count") +
+  ggtitle("PMERQ repurposing disengagement histogram")
 ```
 
 #### Suppression frequency 
 Vars:
 * pmerq_respmod_dis 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = pmerq_respmod_dis)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ response modulation disengagement", y = "count") +
+  ggtitle("Suppression frequency histogram")
 ```
 
 #### Social support frequency 
 Vars:
 * pmerq_respmod_eng  
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = pmerq_respmod_eng)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PMERQ response modulation engagement", y = "count") +
+  ggtitle("Social support histogram")
 ```
 
 
@@ -412,35 +613,57 @@ Vars:
 Vars:
 * fm
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = fm)) +
+  geom_histogram(binwidth = 5) +
+  labs(x = "flourishing measure score", y = "count") +
+  ggtitle("Flourishing histogram")
 ```
 
 #### Satisfaction with life 
 Vars:
 * swl 
 ```{r}
+# Note: Not recoding correctly
 
+# df_proc %>%
+#   ggplot(aes(x = swl)) +
+#   geom_histogram(binwidth = 1) +
+#   labs(x = "satisfaction with life score", y = "count") +
+#   ggtitle("Satisfaction with life histogram")
 ```
 
 #### Positive affect (PANAS)
 Vars: 
 * panas_pos 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = panas_pos)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PANAS positive affect score", y = "count") +
+  ggtitle("PANAS positive affect histogram")
 ```
 
 #### Negative affect (PANAS) 
 Vars: 
 * panas_neg 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = panas_neg)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "PANAS negative affect score", y = "count") +
+  ggtitle("PANAS negative affect histogram")
 ```
 
 #### Perceived Stress 
 Vars:
 * pss 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = pss)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "Perceived Stress Scale score", y = "count") +
+  ggtitle("Perceived stress histogram")
 ```
 
 
@@ -455,7 +678,41 @@ Vars:
 * paq_pos 
 * paq_neg 
 ```{r}
+df_proc %>%
+  ggplot(aes(x = paq)) +
+  geom_histogram(binwidth = 5) +
+  labs(x = "PAQ score", y = "count") +
+  ggtitle("PAQ histogram")
 
+df_proc %>%
+  ggplot(aes(x = paq_dif)) +
+  geom_histogram(binwidth = 3) +
+  labs(x = "PAQ difficulty identifying feelings score", y = "count") +
+  ggtitle("PAQ difficulty identifying feelings histogram")
+
+df_proc %>%
+  ggplot(aes(x = paq_ddf)) +
+  geom_histogram(binwidth = 3) +
+  labs(x = "PAQ difficulty describing feelings score", y = "count") +
+  ggtitle("PAQ difficulty describing feelings histogram")
+
+df_proc %>%
+  ggplot(aes(x = paq_eot)) +
+  geom_histogram(binwidth = 3) +
+  labs(x = "PAQ externally oriented thinking score", y = "count") +
+  ggtitle("PAQ externally oriented thinking histogram")
+
+df_proc %>%
+  ggplot(aes(x = paq_pos)) +
+  geom_histogram(binwidth = 3) +
+  labs(x = "PAQ positive score", y = "count") +
+  ggtitle("PAQ positive histogram")
+
+df_proc %>%
+  ggplot(aes(x = paq_neg)) +
+  geom_histogram(binwidth = 3) +
+  labs(x = "PAQ negative score", y = "count") +
+  ggtitle("PAQ negative histogram")
 ```
 
 #### Alexithymia TAS 
@@ -465,7 +722,29 @@ Vars:
 * tas_ddf 
 * tas_eot
 ```{r}
+df_proc %>%
+  ggplot(aes(x = tas)) +
+  geom_histogram(binwidth = 2) +
+  labs(x = "TAS total score", y = "count") +
+  ggtitle("TAS total score histogram")
 
+df_proc %>%
+  ggplot(aes(x = tas_dif)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "TAS difficulty identifying feelings score", y = "count") +
+  ggtitle("TAS difficulty identifying feelings histogram")
+
+df_proc %>%
+  ggplot(aes(x = tas_ddf)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "TAS difficulty describing feelings score", y = "count") +
+  ggtitle("TAS difficulty describing feelings histogram")
+
+df_proc %>%
+  ggplot(aes(x = tas_eot)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "TAS externally oriented thinking score", y = "count") +
+  ggtitle("TAS externally oriented thinking histogram")
 ```
 
 
@@ -473,14 +752,22 @@ Vars:
 Vars: 
 * fcv 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = fcv)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "fear of coronavirus scale score", y = "count") +
+  ggtitle("Fear of coronavirus histogram")
 ```
 
 #### Social desiribility 
 Vars: 
 * sds 
 ```{r}
-
+df_proc %>%
+  ggplot(aes(x = sds)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "social desiribility scale score", y = "count") +
+  ggtitle("Social desiribility histogram")
 ```
 
 
@@ -507,37 +794,72 @@ TODO:
 
 ### Nature time <-> distraction 
 ```{r}
+cor.test(df_proc$nature_time, df_proc$pmerq_attdep_dis)
 
+df_proc %>% 
+  ggplot(aes(x = pmerq_attdep_dis, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 ```
 
 ### Nature time <-> reappraisal 
 ```{r}
+cor.test(df_proc$nature_time, df_proc$pmerq_reappraise)
 
+df_proc %>% 
+  ggplot(aes(x = pmerq_reappraise, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 ```
 
 ### Nature time <-> rumination 
 ```{r}
+cor.test(df_proc$nature_time, df_proc$rrs_brood)
 
+df_proc %>% 
+  ggplot(aes(x = rrs_brood, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 ```
 
 ### Nature time <-> flourishing 
 ```{r}
+cor.test(df_proc$nature_time, df_proc$fm)
 
+df_proc %>% 
+  ggplot(aes(x = fm, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 ```
 
 ### Nature time <-> perceived stress 
 ```{r}
+cor.test(df_proc$nature_time, df_proc$pss)
 
+df_proc %>% 
+  ggplot(aes(x = pss, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 ```
 
 ### Nature time <-> positive affect 
 ```{r}
+cor.test(df_proc$nature_time, df_proc$panas_pos)
 
+df_proc %>% 
+  ggplot(aes(x = panas_pos, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 ```
 
 ### Nature time <-> negative affect 
 ```{r}
+cor.test(df_proc$nature_time, df_proc$panas_neg)
 
+df_proc %>% 
+  ggplot(aes(x = panas_neg, y = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 ```
 
 
@@ -594,7 +916,398 @@ TODO:
   * In the third position, you can use panas_pos, panas_neg, fm, pss, swl
 * (I didn't add the code chunks or headlines this time--you can add them. By running all possible combinations, we should end up with 15 code chunks.)
 
+#### Nature time -> Distraction -> Negative affect
+* Step 1 not significant
+```{r}
+df_proc %>% 
+  lm(pmerq_attdep_dis ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pmerq_attdep_dis)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Distraction (PMERQ)")
+```
 
+#### Nature time -> Reappraisal -> Negative affect
+```{r}
+df_proc %>% 
+  lm(pmerq_reappraise ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Reappraisal (PMERQ)")
+
+# p-value: 0.004715
+
+mod <- '
+pmerq_reappraise ~ a*nature_time
+panas_neg ~ b*pmerq_reappraise + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Rumination -> Positive affect
+```{r}
+df_proc %>% 
+  lm(rrs_brood ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = rrs_brood)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
+
+# Approaching significance
+
+mod <- '
+rrs_brood ~ a*nature_time
+panas_pos ~ b*rrs_brood + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Distraction -> Positive affect
+* Nonsignificant from above
+```{r}
+```
+
+#### Nature time -> Reappraisal -> Positive affect
+```{r}
+df_proc %>% 
+  lm(pmerq_reappraise ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Reappraisal (PMERQ)")
+
+mod <- '
+pmerq_reappraise ~ a*nature_time
+panas_pos ~ b*rrs_brood + cp*pmerq_reappraise
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Rumination -> Flourishing
+```{r}
+df_proc %>% 
+  lm(rrs_brood ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = rrs_brood)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
+
+mod <- '
+rrs_brood ~ a*nature_time
+fm ~ b*rrs_brood + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Distraction -> Flourishing
+* Nonsignificant from above
+```{r}
+```
+
+#### Nature time -> Reappraisal -> Flourishing
+```{r}
+df_proc %>% 
+  lm(pmerq_reappraise ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Reappraisal (PMERQ)")
+
+
+mod <- '
+pmerq_reappraise ~ a*nature_time
+fm ~ b*rrs_brood + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Rumination -> Perceived stress
+```{r}
+df_proc %>% 
+  lm(rrs_brood ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = rrs_brood)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
+
+mod <- '
+rrs_brood ~ a*nature_time
+pss ~ b*rrs_brood + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Distraction -> Perceived stress
+* Nonsignificant from above
+```{r}
+```
+
+#### Nature time -> Reappraisal -> Perceived stress
+```{r}
+df_proc %>% 
+  lm(pmerq_reappraise ~ nature_time, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
+
+mod <- '
+pmerq_reappraise ~ a*nature_time
+pss ~ b*rrs_brood + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Rumination -> Satisfaction with life
+```{r}
+# Note: error from recoding problem above
+
+# df_proc %>% 
+#   lm(rrs_brood ~ nature_time, .) %>% 
+#   summary
+# df_proc %>% 
+#   ggplot(aes(x = nature_time, y = rrs_brood)) +
+#   geom_point() + 
+#   geom_smooth(method = "lm") +
+#   labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
+# 
+# mod <- '
+# rrs_brood ~ a*nature_time
+# swl ~ b*rrs_brood + cp*nature_time
+# indirect := a*b
+# total := indirect + cp
+# '
+# fit <- sem(mod, 
+#            se="bootstrap",
+#            data=df_proc)
+# summary(
+#   fit, 
+#   fit.measures=T, 
+#   rsq=T, 
+#   standardized=T
+# )
+# 
+# parameterEstimates(
+#   fit,
+#   boot.ci.type="bca.simple",
+#   level=0.95,
+#   ci=TRUE,
+#   standardized = TRUE
+# ) %>% 
+#   as.data.frame %>% 
+#   mutate_if(is.numeric, ~round(., 3)) %>% 
+#   select(-std.lv, -std.nox)
+```
+
+#### Nature time -> Distraction -> Satisfaction with life
+* Nonsignificant from above
+```{r}
+```
+
+#### Nature time -> Reappraisal -> Satisfaction with life
+```{r}
+# Note: error from recoding problem above
+
+# df_proc %>% 
+#   lm(pmerq_reappraise ~ nature_time, .) %>% 
+#   summary
+# df_proc %>% 
+#   ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
+#   geom_point() + 
+#   geom_smooth(method = "lm") +
+#   labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
+# 
+# mod <- '
+# pmerq_reappraise ~ a*nature_time
+# swl ~ b*rrs_brood + cp*nature_time
+# indirect := a*b
+# total := indirect + cp
+# '
+# fit <- sem(mod, 
+#            se="bootstrap",
+#            data=df_proc)
+# summary(
+#   fit, 
+#   fit.measures=T, 
+#   rsq=T, 
+#   standardized=T
+# )
+# 
+# parameterEstimates(
+#   fit,
+#   boot.ci.type="bca.simple",
+#   level=0.95,
+#   ci=TRUE,
+#   standardized = TRUE
+# ) %>% 
+#   as.data.frame %>% 
+#   mutate_if(is.numeric, ~round(., 3)) %>% 
+#   select(-std.lv, -std.nox)
+```
 
 ## 2a: Nature contact moderates association of adverse experience and affect 
 We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes. 
@@ -605,17 +1318,49 @@ TODO:
 
 #### Nature time x adverse childhood experiences -> Positive affect 
 ```{r}
-
+df_proc %>% 
+  lm(panas_pos ~ nature_time * ace, .) %>% 
+  summary
+df_proc %>% 
+  lm(panas_pos ~ nature_time * high_ace, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = panas_pos, color = high_ace)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High ACE") 
 ```
 
 #### Nature time x adverse childhood experiences -> Flourishing 
 ```{r}
-
+df_proc %>% 
+  lm(fm ~ nature_time * ace, .) %>% 
+  summary
+df_proc %>% 
+  lm(fm ~ nature_time * high_ace, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = fm, color = high_ace)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Flourishing (fm)", color = "High ACE") 
 ```
 
 #### Nature time x adverse childhood experiences -> Satisfaction with life  
 ```{r}
+# Note: error from recoding problem above
 
+# df_proc %>% 
+#   lm(swl ~ nature_time * ace, .) %>% 
+#   summary
+# df_proc %>% 
+#   lm(swl ~ nature_time * high_ace, .) %>% 
+#   summary
+# df_proc %>% 
+#   ggplot(aes(x = nature_time, y = swl, color = high_ace)) + 
+#   geom_point(alpha = .3) + 
+#   geom_smooth(method = "lm") +
+#   labs(x = "Hrs/week in nature", y = "Satisfaction with life (swl)", color = "High ACE") 
 ```
 
 #### Nature time x adverse childhood experiences -> Negative affect 
@@ -636,10 +1381,67 @@ df_proc %>%
 
 #### Nature time x adverse childhood experiences -> Perceived stress 
 ```{r}
-
+df_proc %>% 
+  lm(pss ~ nature_time * ace, .) %>% 
+  summary
+df_proc %>% 
+  lm(pss ~ nature_time * high_ace, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pss, color = high_ace)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Perceived stress (pss)", color = "High ACE") 
 ```
 
 #### Nature time x Macarthur US rung -> Positive affect
+```{r}
+df_proc %>% 
+  lm(panas_pos ~ nature_time * macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(panas_pos ~ nature_time * high_macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = panas_pos, color = high_macarthur_us_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High Macarthur US status") 
+```
+
+#### Nature time x Macarthur US rung -> Flourishing 
+```{r}
+df_proc %>% 
+  lm(fm ~ nature_time * macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(fm ~ nature_time * high_macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = fm, color = high_macarthur_us_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Flourishing  (fm)", color = "High Macarthur US status") 
+```
+
+#### Nature time x Macarthur US rung -> Satisfaction with life  
+```{r}
+# Note: error from recoding problem above
+
+# df_proc %>% 
+#   lm(swl ~ nature_time * macarthur_us_rung, .) %>% 
+#   summary
+# df_proc %>% 
+#   lm(swl ~ nature_time * high_macarthur_us_rung, .) %>% 
+#   summary
+# df_proc %>% 
+#   ggplot(aes(x = nature_time, y = swl, color = high_macarthur_us_rung)) + 
+#   geom_point(alpha = .3) + 
+#   geom_smooth(method = "lm") +
+#   labs(x = "Hrs/week in nature", y = "Satisfaction with life (swl)", color = "High Macarthur US status") 
+```
+
+#### Nature time x Macarthur US rung -> Negative affect   
 ```{r}
 df_proc %>% 
   lm(panas_neg ~ nature_time * macarthur_us_rung, .) %>% 
@@ -651,52 +1453,99 @@ df_proc %>%
   ggplot(aes(x = nature_time, y = panas_neg, color = high_macarthur_us_rung)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High Macarthur US status") 
-```
-
-#### Nature time x Macarthur US rung -> Flourishing 
-```{r}
-
-```
-
-#### Nature time x Macarthur US rung -> Satisfaction with life  
-```{r}
-
-```
-
-#### Nature time x Macarthur US rung -> Negative affect   
-```{r}
-
+  labs(x = "Hrs/week in nature", y = "Negative affect (PANAS-neg)", color = "High Macarthur US status") 
 ```
 
 #### Nature time x Macarthur US rung -> Perceived stress 
 ```{r}
-
+df_proc %>% 
+  lm(pss ~ nature_time * macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(pss ~ nature_time * high_macarthur_us_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pss, color = high_macarthur_us_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Perceived stress (pss)", color = "High Macarthur US status") 
 ```
 
 #### Nature time x Macarthur Community rung -> Positive affect
 ```{r}
-
+df_proc %>% 
+  lm(panas_pos ~ nature_time * macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(panas_pos ~ nature_time * high_macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = panas_pos, color = high_macarthur_comm_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High Macarthur Community status") 
 ```
 
 #### Nature time x Macarthur Community rung -> Flourishing 
 ```{r}
-
+df_proc %>% 
+  lm(fm ~ nature_time * macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(fm ~ nature_time * high_macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = fm, color = high_macarthur_comm_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Flourishing (fm)", color = "High Macarthur Community status") 
 ```
 
 #### Nature time x Macarthur Community rung -> Satisfaction with life  
 ```{r}
+# Note: error from recoding problem above
 
+# df_proc %>% 
+#   lm(swl ~ nature_time * macarthur_comm_rung, .) %>% 
+#   summary
+# df_proc %>% 
+#   lm(swl ~ nature_time * high_macarthur_comm_rung, .) %>% 
+#   summary
+# df_proc %>% 
+#   ggplot(aes(x = nature_time, y = swl, color = high_macarthur_comm_rung)) + 
+#   geom_point(alpha = .3) + 
+#   geom_smooth(method = "lm") +
+#   labs(x = "Hrs/week in nature", y = "Satisfaction with life (swl)", color = "High Macarthur Community status") 
 ```
 
 #### Nature time x Macarthur Community rung -> Negative affect   
 ```{r}
-
+df_proc %>% 
+  lm(panas_neg ~ nature_time * macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(panas_neg ~ nature_time * high_macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = panas_neg, color = high_macarthur_comm_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Negative affect (PANAS-neg)", color = "High Macarthur Community status") 
 ```
 
 #### Nature time x Macarthur Community rung -> Perceived stress 
 ```{r}
-
+df_proc %>% 
+  lm(pss ~ nature_time * macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  lm(pss ~ nature_time * high_macarthur_comm_rung, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = nature_time, y = pss, color = high_macarthur_comm_rung)) + 
+  geom_point(alpha = .3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Hrs/week in nature", y = "Perceived stress (pss)", color = "High Macarthur Community status") 
 ```
 
 
@@ -704,8 +1553,6 @@ df_proc %>%
 ## 2b: Moderations mediated by reappraisal and rumination 
 We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
 **We can wait on this section for now**
-
-
 
 
 
