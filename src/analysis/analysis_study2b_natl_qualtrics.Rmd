@@ -1,19 +1,12 @@
 ---
 title: "Nature ER National Qualtrics Study"
-author: "Ashish"
-date: "4/26/2021"
-output: 
-  html_document:
-  toc: true
-  toc_float: true
-  toc_collapsed: true
-toc_depth: 3
-number_sections: true
-theme: lumen
+author: "Ashish and Jordan"
+date: "2021-05-24"
+output: rmdformats::readthedown
 ---
 
 # Notes
-## TODO (for Ashish)
+## TODO 
 * Need to figure out how to deal with heteroscedasticity for time in nature. E.g. in mediation models
   * Lim & Melville. (2009). Robustness of Structural Equation Modeling to Distributional Misspecification: Empirical Evidence & Research Guidelines 
 * Mediated moderation
@@ -32,38 +25,13 @@ theme_set(theme_bw())
 
 # Preprocessing 
 ## Functions 
-```{r, message=F}
+```{r, message=F, warning=F}
 codebook_renamer <- function(df, codebook, old_col_name="old_col_name", new_col_name="new_col_name"){
   codebook <- codebook %>%
     dplyr::filter(.data[[old_col_name]] %in% names(df))
   df %>% 
   rename_at(vars(codebook[[old_col_name]]), ~codebook[[new_col_name]])
 }
-# recoder <- function(column, var_regex, var_col_name, codebook=codebook_values){
-#   codebook <- codebook %>%
-#     dplyr::filter(!is.na(old_value) | !is.na(new_value)) %>% 
-#     dplyr::mutate_at(vars(old_value, new_value), ~replace_na(., "<na_value>"))
-#   column <- column %>% 
-#     replace_na(., "<na_value>")
-# 	level_key <- codebook %>%
-# 	  dplyr::filter(.data[[var_col_name]]==!!var_regex) %>% 
-# 	  dplyr::mutate(old_value = tolower(old_value)) %>% 
-# 		dplyr::select(old_value, new_value) %>%
-# 		deframe
-# 	level_key <- c(level_key, "<na_value>"=NA)
-# 	recoded_column <- recode(tolower(column), !!!level_key)
-# 	recoded_column <- as.numeric(recoded_column)
-# 	 return(recoded_column)
-# }
-# codebook_recoder <- function(df, codebook, var_col_name="var_regex"){
-#   var_regexes <- unique(codebook[[var_col_name]])
-#   for(var in var_regexes){
-#     df <- df %>% 
-#       dplyr::mutate_at(vars(matches(paste0("^", var))), 
-#                        ~recoder(., var_regex=var, var_col_name=var_col_name))
-#   }
-#   return(df)
-# }
 
 codebook_recoder <- function(df,
                              codebook,
@@ -141,6 +109,33 @@ df_raw <- df_file %>%
 ## Constants
 ```{r, message=F}
 columns_to_numeric <- c("nature_time", "age", "perceived_exertion")
+```
+
+## Functions
+```{r}
+get_race <- function(df, race_column="race"){
+  # Function to turn race column into several columns with binary values
+  tibble(
+    white = str_detect(df[[race_column]], "White"),
+    black = str_detect(df[[race_column]], "Black"),
+    amindian = str_detect(df[[race_column]], "American Indian"),
+    eastasian = str_detect(df[[race_column]], "East Asian"),
+    filipino = str_detect(df[[race_column]], "Filipin"),
+    seasian = str_detect(df[[race_column]], "Southeast Asian"),
+    otherasian = str_detect(df[[race_column]], "Other Asian"),
+    pacisland = str_detect(df[[race_column]], "Pacific"),
+    chicano = str_detect(df[[race_column]], "Chican"),
+    puertorican = str_detect(df[[race_column]], "Puerto"),
+    centralamerican = str_detect(df[[race_column]], "Central American"),
+    southamerican = str_detect(df[[race_column]], "South American"),
+    otherlatin = str_detect(df[[race_column]], "Other Hispanic"),
+    other = str_detect(df[[race_column]], "Other(?! Hispanic)(?! Asian)"),
+    prefernot = str_detect(df[[race_column]], "Prefer not")
+  ) %>% 
+    rename_all(~paste0("race_", .)) %>% 
+    mutate_all(as.integer)
+}
+
 ```
 
 
@@ -267,12 +262,18 @@ df_proc <- df_recoded %>%
   ))) %>%
   
   # -- discretizing continuous variables for visualizations -- #
-  mutate(high_ace = case_when(ace <= 4 ~ "1", ace > 4 ~ "0")) %>% 
-  mutate(high_macarthur_us_rung = case_when(macarthur_us_rung <= median(macarthur_us_rung) ~ "1",
-                                            macarthur_us_rung > median(macarthur_us_rung) ~ "0")) %>% 
-  mutate(high_macarthur_comm_rung = case_when(macarthur_comm_rung <= median(macarthur_comm_rung) ~ "1",
-                                              macarthur_comm_rung > median(macarthur_comm_rung) ~ "0"))
+  mutate(high_ace = case_when(
+    ace <= 4 ~ 0, 
+    ace > 4 ~ 1)) %>% 
+  mutate(high_macarthur_us_rung = case_when(
+    macarthur_us_rung <= median(macarthur_us_rung) ~ 0,
+    macarthur_us_rung > median(macarthur_us_rung) ~ 1)) %>% 
+  mutate(high_macarthur_comm_rung = case_when(
+    macarthur_comm_rung <= median(macarthur_comm_rung) ~ 0,
+    macarthur_comm_rung > median(macarthur_comm_rung) ~ 1)) %>% 
+  cbind(get_race(.))
 ```
+
 
 
 ```{r, echo=FALSE}
@@ -282,6 +283,7 @@ df_proc <- df_recoded %>%
 
 # Preregistration 
 ## Hypotheses
+
 [Pre-registration](https://osf.io/t94h2) 
 
 1A. We hypothesize that nature contact will be associated with greater frequency of (i) situation selection in the form of approaching positively valenced situations, (ii) distraction, and (iii) reappraisal strategies and (iv) lesser frequency of rumination. Moreover, we hypothesize that emotion regulation strategies will be related to affective outcomes.
@@ -305,14 +307,11 @@ Participants must pass 4/4 attention checks to be included.
 Following Leiner (2019), we will remove participants based on implausible completion times using the following procedure: "For each page, the sample’s median page completion time is divided by the individual completion time, resulting in a speed factor. A factor of 2 means that the respondent has completed a page twice as fast as the typical respondent. An average speed factor per respondent is computed after the page factors are clipped to a maximum value of 3."
 We will exclude participants who respond with an average speed factor greater than 2.
 
-Sensitivity analyses will be run to compare results with and without outliers. 
+Sensitivity analyses will be run to compare results with and without outliers.
 
+# Distributions 
 
-# Initial data exploration 
-
-## Distributions 
-
-###  Total N
+##  Total N
 ```{r, message=F}
 df_proc %>% 
   nrow
@@ -322,17 +321,16 @@ df_proc %>%
   length
 ```
 
-### Demographics
+## Demographics
 
-#### Gender
+### Gender
 ```{r, message=F}
 df_proc %>% 
   group_by(gender) %>% 
   summarize(n = n())
 ```
 
-#### Age
-* This is why it's so important to get to know your data. See anything odd? :)
+### Age
 ```{r, message=F}
 df_proc %>% 
   ggplot(aes(x = age)) + 
@@ -348,7 +346,7 @@ df_proc %>%
 ```
 
 
-#### MacArthur status
+### MacArthur status
 ```{r, message=F}
 # MacArthur US histogram
 df_proc %>%
@@ -365,7 +363,7 @@ df_proc %>%
   ggtitle("MacArthur Rung Community histogram")
 ```
 
-#### Education
+### Education
 ```{r, message=F}
 df_proc %>% 
   ggplot(aes(x = edu)) + 
@@ -374,10 +372,7 @@ df_proc %>%
   coord_flip() # rotate the plot
 ```
 
-#### Income
-TODO: 
-* Re-order the income bracket categories in the preprocessing script above (see example with education)
-* Create bar plot (see example with education)
+### Income
 ```{r, message=F}
 df_proc %>%
   ggplot(aes(x = income)) + 
@@ -386,25 +381,30 @@ df_proc %>%
   coord_flip()
 ```
 
-#### Race
-* Future TODO - (don't worry about for now)
-  * break apart multi-racial lines to get counts for each race 
+### Race
+
 ```{r, message=F}
-df_proc %>% 
+df_race <- df_proc %>% 
+  select(pid, starts_with("race_")) %>% 
+  select(-race_text) %>% 
+  pivot_longer(!pid, names_to = "race") %>% 
   group_by(race) %>% 
-  summarize(n = n())
+  summarize(n = sum(value),
+            pr = mean(value)) %>% 
+  mutate(race = str_replace(race, "race_", "")) %>% 
+  arrange(n) %>% 
+  mutate(race = fct_reorder(race, n))
+    
+df_race %>% 
+  knitr::kable()
+df_race %>% 
+  ggplot(aes(x = race, y = n)) +
+  geom_bar(stat="identity") +
+  coord_flip()
   
 ```
 
-TODO:
-* Create histograms for continuous variables
-  * e.g. time in nature, perceived exertion
-* Create barplots for the categorical variables, reordering the factors when needed 
-  * e.g. frequency of nature contact, nature setting
-
-### Nature 
-
-#### Time in nature 
+## Time in nature 
 > Over the last month, approximately how many HOURS PER WEEK do you consider yourself to have interacted with nature? This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc...
 
 * Highly skewed distribution
@@ -424,7 +424,7 @@ df_proc %>%
   ggtitle("Log-transformed hours/week in nature histogram")
 ```
 
-#### Frequency of nature contact
+## Frequency of nature contact
 > About how often do you usually visit or pass through outdoor natural areas for any reason? This includes, for example, walking, biking, or recreating outside in local, regional, or national parks, at the beach, beside or within lakes, creeks, or the ocean, gardening or tending to plants, camping, fishing, reading or walking outside next to trees, engaging in yard work with natural elements, etc...
 
 ```{r, message=F}
@@ -436,7 +436,7 @@ df_proc %>%
   coord_flip()
 ```
 
-#### Nature setting
+## Nature setting
 > Which option best describes where, in the past month, most of your nature exposure took place? If you spent time in multiple nature areas, please pick the option where you spent the most time. 
 
 ```{r, message=F}
@@ -448,7 +448,7 @@ df_proc %>%
   coord_flip()
 ```
 
-#### Perceived exertion in nature
+## Perceived exertion in nature
 > Please rate your perception of exertion, i.e. how heavy and strenuous the exercise felt to you and how tired you were, when you were in the natural area during which you spent the most time in the past month. The perception of exertion is mainly felt as strain and fatigue in your muscles and as breathlessness or aches in the chest. Use this scale from 6 to 20, where 6 means “No exertion at all” and 20
 means “Maximal exertion.”
 
@@ -461,19 +461,15 @@ df_proc %>%
 ```
 
 
-TODO:
-* tally scales for relevant variables in preprocessing script above
-* create histograms for each variable
 
-### Emotion regulation 
+## Situation selection frequency 
 
-#### Situation selection frequency 
 Vars: 
-* sitselect
-* sitselect_approach 
+* sitselect 
+* sitselect_approach
 * sitselect_avoid 
-* pmerq_sitsel_eng
-* pmerq_sitsel_dis
+* pmerq_sitsel_eng 
+* pmerq_sitsel_dis 
 ```{r, message=F}
 
 df_proc %>%
@@ -507,7 +503,8 @@ df_proc %>%
   ggtitle("PMERQ situation selection disengagement histogram")
 ```
 
-#### Situation modification frequency
+## Situation modification frequency
+
 Vars: 
 * pmerq_sitmod_eng 
 * pmerq_sitmod_dis 
@@ -525,7 +522,8 @@ df_proc %>%
   ggtitle("PMERQ situation modification disengagement histogram")
 ```
 
-#### Distraction frequency
+## Distraction frequency
+
 Vars: 
 * pmerq_attdep 
 * pmerq_attdep_eng 
@@ -550,7 +548,8 @@ df_proc %>%
   ggtitle("PMERQ attention deployment disengagement histogram")
 ```
 
-#### Rumination frequency 
+## Rumination frequency 
+
 Vars: 
 * rrs_brood 
 ```{r, message=F}
@@ -561,9 +560,10 @@ df_proc %>%
   ggtitle("Brooding (Rumination Reponse Scale) histogram")
 ```
 
-#### Reappraisal frequency 
+## Reappraisal frequency 
+
 Vars:
-* pmerq_reappraise (this variable is not in the codebook, but I already made it in the preprocessing script)
+* pmerq_reappraise 
 * pmerq_recons 
 * pmerq_recons_eng
 * pmerq_recons_dis
@@ -614,9 +614,11 @@ df_proc %>%
   ggtitle("PMERQ repurposing disengagement histogram")
 ```
 
-#### Suppression frequency 
+## Suppression frequency 
+
 Vars:
 * pmerq_respmod_dis 
+
 ```{r, message=F}
 df_proc %>%
   ggplot(aes(x = pmerq_respmod_dis)) +
@@ -625,7 +627,8 @@ df_proc %>%
   ggtitle("Suppression frequency histogram")
 ```
 
-#### Social support frequency 
+## Social support frequency 
+
 Vars:
 * pmerq_respmod_eng  
 ```{r, message=F}
@@ -637,9 +640,8 @@ df_proc %>%
 ```
 
 
-### Affective outcomes 
+## Flourishing 
 
-#### Flourishing 
 Vars:
 * fm
 ```{r, message=F}
@@ -650,7 +652,8 @@ df_proc %>%
   ggtitle("Flourishing histogram")
 ```
 
-#### Satisfaction with life 
+## Satisfaction with life 
+
 Vars:
 * swl 
 ```{r, message=F}
@@ -662,7 +665,8 @@ df_proc %>%
   ggtitle("Satisfaction with life histogram")
 ```
 
-#### Positive affect (PANAS)
+## Positive affect (PANAS)
+
 Vars: 
 * panas_pos 
 ```{r, message=F}
@@ -673,7 +677,8 @@ df_proc %>%
   ggtitle("PANAS positive affect histogram")
 ```
 
-#### Negative affect (PANAS) 
+## Negative affect (PANAS) 
+
 Vars: 
 * panas_neg 
 ```{r, message=F}
@@ -684,7 +689,8 @@ df_proc %>%
   ggtitle("PANAS negative affect histogram")
 ```
 
-#### Perceived Stress 
+## Perceived Stress 
+
 Vars:
 * pss 
 ```{r, message=F}
@@ -696,9 +702,8 @@ df_proc %>%
 ```
 
 
-### Other variables
+## Alexithymia PAQ 
 
-#### Alexithymia PAQ 
 Vars: 
 * paq 
 * paq_dif 
@@ -744,7 +749,8 @@ df_proc %>%
   ggtitle("PAQ negative histogram")
 ```
 
-#### Alexithymia TAS 
+## Alexithymia TAS 
+
 Vars: 
 * tas 
 * tas_dif 
@@ -777,7 +783,8 @@ df_proc %>%
 ```
 
 
-#### Fear of coronavirus 
+## Fear of coronavirus 
+
 Vars: 
 * fcv 
 ```{r, message=F}
@@ -788,7 +795,8 @@ df_proc %>%
   ggtitle("Fear of coronavirus histogram")
 ```
 
-#### Social desiribility 
+## Social desiribility 
+
 Vars: 
 * sds 
 ```{r, message=F}
@@ -800,12 +808,18 @@ df_proc %>%
 ```
 
 
-# Confirmatory analysis
+# Confirmatory analyses
 
-## 1a: Nature contact and ER frequency 
+In these headings of these Confirmatory analyses, asteriks indicate significance of a hypothesized effect. 
+† => p < .10 
+* => p < .05 
+** => p < .01 
+*** => p < .001
+
+# H1a: Nature contact and ER frequency 
 We hypothesize that nature contact will be associated with greater frequency of (i) situation selection in the form of approaching positively valenced situations, (ii) distraction, and (iii) reappraisal strategies and (iv) lesser frequency of rumination. Moreover, we hypothesize that emotion regulation strategies will be related to affective outcomes. 
 
-### Nature time <-> situation selection approach pos
+## * Nature time <-> situation selection approach pos
 Results 
 * r = .09, p = .030
 * Heteroscedasticity 
@@ -819,7 +833,7 @@ df_proc %>%
 ```
 
 
-### Nature time <-> distraction 
+## Nature time <-> distraction 
 ```{r, message=F}
 cor.test(df_proc$nature_time, df_proc$pmerq_attdep_dis)
 
@@ -829,7 +843,7 @@ df_proc %>%
   geom_smooth(method = "lm")
 ```
 
-### Nature time <-> reappraisal 
+## ** Nature time <-> reappraisal 
 ```{r, message=F}
 cor.test(df_proc$nature_time, df_proc$pmerq_reappraise)
 
@@ -839,7 +853,7 @@ df_proc %>%
   geom_smooth(method = "lm")
 ```
 
-### Nature time <-> rumination 
+## † Nature time <-> rumination 
 ```{r, message=F}
 cor.test(df_proc$nature_time, df_proc$rrs_brood)
 
@@ -849,7 +863,7 @@ df_proc %>%
   geom_smooth(method = "lm")
 ```
 
-### Nature time <-> flourishing 
+## ** Nature time <-> flourishing 
 ```{r, message=F}
 cor.test(df_proc$nature_time, df_proc$fm)
 
@@ -859,7 +873,17 @@ df_proc %>%
   geom_smooth(method = "lm")
 ```
 
-### Nature time <-> perceived stress 
+## *** Nature time <-> satisfaction with life 
+```{r, message=F}
+cor.test(df_proc$nature_time, df_proc$swl)
+
+df_proc %>% 
+  ggplot(aes(y = swl, x = nature_time)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+```
+
+## Nature time <-> perceived stress 
 ```{r, message=F}
 cor.test(df_proc$nature_time, df_proc$pss)
 
@@ -869,7 +893,7 @@ df_proc %>%
   geom_smooth(method = "lm")
 ```
 
-### Nature time <-> positive affect 
+## *** Nature time <-> positive affect 
 ```{r, message=F}
 cor.test(df_proc$nature_time, df_proc$panas_pos)
 
@@ -879,7 +903,7 @@ df_proc %>%
   geom_smooth(method = "lm")
 ```
 
-### Nature time <-> negative affect 
+## Nature time <-> negative affect 
 ```{r, message=F}
 cor.test(df_proc$nature_time, df_proc$panas_neg)
 
@@ -890,126 +914,12 @@ df_proc %>%
 ```
 
 
-## 1b: Nature exposure -> ER -> affect 
+# H1b: Nature exposure -> ER -> affect 
 We hypothesize that frequency of distraction, reappraisal, and rumination will mediate the association of nature contact with affective outcomes.
 
-#### Nature time -> Rumination -> Negative affect
+## Nature time -> Rumination -> Positive affect 
+* Non-significant indirect effect
 ```{r, message=F}
-# Step 1: Check for total effect
-df_proc %>% 
-  lm(rrs_brood ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = rrs_brood)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
-
-# If Step 1 is significant, continue to Step 2...
-
-# Step 2: Conduct mediation analysis
-mod <- '
-rrs_brood ~ a*nature_time
-panas_neg ~ b*rrs_brood + cp*nature_time
-indirect := a*b
-total := indirect + cp
-'
-fit <- sem(mod, 
-           se="bootstrap",
-           data=df_proc)
-summary(
-  fit, 
-  fit.measures=T, 
-  rsq=T, 
-  standardized=T
-)
-
-parameterEstimates(
-  fit,
-  boot.ci.type="bca.simple",
-  level=0.95,
-  ci=TRUE,
-  standardized = TRUE
-) %>% 
-  as.data.frame %>% 
-  mutate_if(is.numeric, ~round(., 3)) %>% 
-  select(-std.lv, -std.nox)
-```
-
-TODO: 
-* Conduct mediations following the template above 
-  * In the first slot, you can always use nature_time
-  * In the second position, you can use rrs_brood, pmerq_attdep_dis, pmerq_reappraise
-  * In the third position, you can use panas_pos, panas_neg, fm, pss, swl
-* (I didn't add the code chunks or headlines this time--you can add them. By running all possible combinations, we should end up with 15 code chunks.)
-
-#### Nature time -> Distraction -> Negative affect
-* Step 1 not significant
-```{r, message=F}
-df_proc %>% 
-  lm(pmerq_attdep_dis ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = pmerq_attdep_dis)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Distraction (PMERQ)")
-```
-
-#### Nature time -> Reappraisal -> Negative affect
-```{r, message=F}
-df_proc %>% 
-  lm(pmerq_reappraise ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Reappraisal (PMERQ)")
-
-# p-value: 0.004715
-
-mod <- '
-pmerq_reappraise ~ a*nature_time
-panas_neg ~ b*pmerq_reappraise + cp*nature_time
-indirect := a*b
-total := indirect + cp
-'
-fit <- sem(mod, 
-           se="bootstrap",
-           data=df_proc)
-summary(
-  fit, 
-  fit.measures=T, 
-  rsq=T, 
-  standardized=T
-)
-
-parameterEstimates(
-  fit,
-  boot.ci.type="bca.simple",
-  level=0.95,
-  ci=TRUE,
-  standardized = TRUE
-) %>% 
-  as.data.frame %>% 
-  mutate_if(is.numeric, ~round(., 3)) %>% 
-  select(-std.lv, -std.nox)
-```
-
-#### Nature time -> Rumination -> Positive affect
-```{r, message=F}
-df_proc %>% 
-  lm(rrs_brood ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = rrs_brood)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
-
-# Approaching significance
-
 mod <- '
 rrs_brood ~ a*nature_time
 panas_pos ~ b*rrs_brood + cp*nature_time
@@ -1038,22 +948,40 @@ parameterEstimates(
   select(-std.lv, -std.nox)
 ```
 
-#### Nature time -> Distraction -> Positive affect
-* Nonsignificant from above
+## Nature time -> Distraction -> Positive affect 
+* Non-significant indirect effect
 ```{r, message=F}
+mod <- '
+pmerq_attdep_dis ~ a*nature_time
+panas_pos ~ b*pmerq_attdep_dis + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
 ```
 
-#### Nature time -> Reappraisal -> Positive affect
+## † Nature time -> Reappraisal -> Positive affect 
+* indirect ß = -.009, p = .09
 ```{r, message=F}
-df_proc %>% 
-  lm(pmerq_reappraise ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Reappraisal (PMERQ)")
-
 mod <- '
 pmerq_reappraise ~ a*nature_time
 panas_pos ~ b*rrs_brood + cp*pmerq_reappraise
@@ -1082,17 +1010,9 @@ parameterEstimates(
   select(-std.lv, -std.nox)
 ```
 
-#### Nature time -> Rumination -> Flourishing
+## Nature time -> Rumination -> Flourishing 
+* Non-significant indirect effect 
 ```{r, message=F}
-df_proc %>% 
-  lm(rrs_brood ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = rrs_brood)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
-
 mod <- '
 rrs_brood ~ a*nature_time
 fm ~ b*rrs_brood + cp*nature_time
@@ -1121,26 +1041,43 @@ parameterEstimates(
   select(-std.lv, -std.nox)
 ```
 
-#### Nature time -> Distraction -> Flourishing
-* Nonsignificant from above
+## Nature time -> Distraction -> Flourishing 
+* Non-significant indirect effect 
 ```{r, message=F}
+mod <- '
+pmerq_attdep_dis ~ a*nature_time
+fm ~ b*pmerq_attdep_dis + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod, 
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit, 
+  fit.measures=T, 
+  rsq=T, 
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>% 
+  as.data.frame %>% 
+  mutate_if(is.numeric, ~round(., 3)) %>% 
+  select(-std.lv, -std.nox)
 ```
 
-#### Nature time -> Reappraisal -> Flourishing
+## Nature time -> Reappraisal -> Flourishing 
+* indirect ß = .06, p = .008 
 ```{r, message=F}
-df_proc %>% 
-  lm(pmerq_reappraise ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Reappraisal (PMERQ)")
-
-
 mod <- '
 pmerq_reappraise ~ a*nature_time
-fm ~ b*rrs_brood + cp*nature_time
+fm ~ b*pmerq_reappraise + cp*nature_time
 indirect := a*b
 total := indirect + cp
 '
@@ -1166,101 +1103,9 @@ parameterEstimates(
   select(-std.lv, -std.nox)
 ```
 
-#### Nature time -> Rumination -> Perceived stress
+## Nature time -> Rumination -> Satisfaction with life
+* Non-significant indirect effect 
 ```{r, message=F}
-df_proc %>% 
-  lm(rrs_brood ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = rrs_brood)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
-
-mod <- '
-rrs_brood ~ a*nature_time
-pss ~ b*rrs_brood + cp*nature_time
-indirect := a*b
-total := indirect + cp
-'
-fit <- sem(mod, 
-           se="bootstrap",
-           data=df_proc)
-summary(
-  fit, 
-  fit.measures=T, 
-  rsq=T, 
-  standardized=T
-)
-
-parameterEstimates(
-  fit,
-  boot.ci.type="bca.simple",
-  level=0.95,
-  ci=TRUE,
-  standardized = TRUE
-) %>% 
-  as.data.frame %>% 
-  mutate_if(is.numeric, ~round(., 3)) %>% 
-  select(-std.lv, -std.nox)
-```
-
-#### Nature time -> Distraction -> Perceived stress
-* Nonsignificant from above
-```{r, message=F}
-```
-
-#### Nature time -> Reappraisal -> Perceived stress
-```{r, message=F}
-df_proc %>% 
-  lm(pmerq_reappraise ~ nature_time, .) %>% 
-  summary
-df_proc %>% 
-  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
-
-mod <- '
-pmerq_reappraise ~ a*nature_time
-pss ~ b*rrs_brood + cp*nature_time
-indirect := a*b
-total := indirect + cp
-'
-fit <- sem(mod, 
-           se="bootstrap",
-           data=df_proc)
-summary(
-  fit, 
-  fit.measures=T, 
-  rsq=T, 
-  standardized=T
-)
-
-parameterEstimates(
-  fit,
-  boot.ci.type="bca.simple",
-  level=0.95,
-  ci=TRUE,
-  standardized = TRUE
-) %>% 
-  as.data.frame %>% 
-  mutate_if(is.numeric, ~round(., 3)) %>% 
-  select(-std.lv, -std.nox)
-```
-
-#### Nature time -> Rumination -> Satisfaction with life
-```{r, message=F}
-
-df_proc %>%
-  lm(rrs_brood ~ nature_time, .) %>%
-  summary
-df_proc %>%
-  ggplot(aes(x = nature_time, y = rrs_brood)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
-
 mod <- '
 rrs_brood ~ a*nature_time
 swl ~ b*rrs_brood + cp*nature_time
@@ -1289,26 +1134,12 @@ parameterEstimates(
   select(-std.lv, -std.nox)
 ```
 
-#### Nature time -> Distraction -> Satisfaction with life
-* Nonsignificant from above
+## Nature time -> Distraction -> Satisfaction with life 
+* Non-significant indirect effect 
 ```{r, message=F}
-```
-
-#### Nature time -> Reappraisal -> Satisfaction with life
-```{r, message=F}
-
-df_proc %>%
-  lm(pmerq_reappraise ~ nature_time, .) %>%
-  summary
-df_proc %>%
-  ggplot(aes(x = nature_time, y = pmerq_reappraise)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  labs(x = "Hrs/week in nature", y = "Brooding (RRS)")
-
 mod <- '
-pmerq_reappraise ~ a*nature_time
-swl ~ b*rrs_brood + cp*nature_time
+pmerq_attdep_dis ~ a*nature_time
+swl ~ b*pmerq_attdep_dis + cp*nature_time
 indirect := a*b
 total := indirect + cp
 '
@@ -1334,14 +1165,42 @@ parameterEstimates(
   select(-std.lv, -std.nox)
 ```
 
-## 2a: Nature contact moderates association of adverse experience and affect 
+## ** Nature time -> Reappraisal -> Satisfaction with life 
+* indirect effect ß = .05, p = .007
+```{r, message=F}
+mod <- '
+pmerq_reappraise ~ a*nature_time
+swl ~ b*pmerq_reappraise + cp*nature_time
+indirect := a*b
+total := indirect + cp
+'
+fit <- sem(mod,
+           se="bootstrap",
+           data=df_proc)
+summary(
+  fit,
+  fit.measures=T,
+  rsq=T,
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>%
+  as.data.frame %>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  select(-std.lv, -std.nox)
+```
+
+# H2a: Nature contact moderates association of adverse experience and affect 
 We hypothesize that nature contact will moderate the associations of (i) adverse life experiences and (ii) perceived social status with affective outcomes. 
 
-
-TODO: 
-* Conduct moderation analyses using the templates 
-
-#### Nature time x adverse childhood experiences -> Positive affect 
+## † Nature time x adverse childhood experiences -> Positive affect 
+* marginally significant when using binary ACE 
 ```{r, message=F}
 df_proc %>% 
   lm(panas_pos ~ nature_time * ace, .) %>% 
@@ -1356,7 +1215,7 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High ACE") 
 ```
 
-#### Nature time x adverse childhood experiences -> Flourishing 
+## Nature time x adverse childhood experiences -> Flourishing 
 ```{r, message=F}
 df_proc %>% 
   lm(fm ~ nature_time * ace, .) %>% 
@@ -1371,7 +1230,7 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Flourishing (fm)", color = "High ACE") 
 ```
 
-#### Nature time x adverse childhood experiences -> Satisfaction with life  
+## Nature time x adverse childhood experiences -> Satisfaction with life  
 ```{r, message=F}
 
 df_proc %>%
@@ -1387,7 +1246,8 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Satisfaction with life (swl)", color = "High ACE")
 ```
 
-#### Nature time x adverse childhood experiences -> Negative affect 
+## † Nature time x adverse childhood experiences -> Negative affect 
+* marginally significant when using binary ACE 
 ```{r, message=F}
 df_proc %>% 
   lm(panas_neg ~ nature_time * ace, .) %>% 
@@ -1403,7 +1263,7 @@ df_proc %>%
 ```
 
 
-#### Nature time x adverse childhood experiences -> Perceived stress 
+## Nature time x adverse childhood experiences -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
   lm(pss ~ nature_time * ace, .) %>% 
@@ -1418,13 +1278,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Perceived stress (pss)", color = "High ACE") 
 ```
 
-#### Nature time x Macarthur US rung -> Positive affect
+## Nature time x Macarthur US rung -> Positive affect
 ```{r, message=F}
 df_proc %>% 
   lm(panas_pos ~ nature_time * macarthur_us_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(panas_pos ~ nature_time * high_macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = panas_pos, color = high_macarthur_us_rung)) + 
@@ -1433,13 +1290,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High Macarthur US status") 
 ```
 
-#### Nature time x Macarthur US rung -> Flourishing 
+## Nature time x Macarthur US rung -> Flourishing 
 ```{r, message=F}
 df_proc %>% 
   lm(fm ~ nature_time * macarthur_us_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(fm ~ nature_time * high_macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = fm, color = high_macarthur_us_rung)) + 
@@ -1448,14 +1302,11 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Flourishing  (fm)", color = "High Macarthur US status") 
 ```
 
-#### Nature time x Macarthur US rung -> Satisfaction with life  
+## * Nature time x Macarthur US rung -> Satisfaction with life  
 ```{r, message=F}
 
 df_proc %>%
   lm(swl ~ nature_time * macarthur_us_rung, .) %>%
-  summary
-df_proc %>%
-  lm(swl ~ nature_time * high_macarthur_us_rung, .) %>%
   summary
 df_proc %>%
   ggplot(aes(x = nature_time, y = swl, color = high_macarthur_us_rung)) +
@@ -1464,13 +1315,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Satisfaction with life (swl)", color = "High Macarthur US status")
 ```
 
-#### Nature time x Macarthur US rung -> Negative affect   
+## Nature time x Macarthur US rung -> Negative affect   
 ```{r, message=F}
 df_proc %>% 
   lm(panas_neg ~ nature_time * macarthur_us_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(panas_neg ~ nature_time * high_macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = panas_neg, color = high_macarthur_us_rung)) + 
@@ -1479,13 +1327,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Negative affect (PANAS-neg)", color = "High Macarthur US status") 
 ```
 
-#### Nature time x Macarthur US rung -> Perceived stress 
+## Nature time x Macarthur US rung -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
   lm(pss ~ nature_time * macarthur_us_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(pss ~ nature_time * high_macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = pss, color = high_macarthur_us_rung)) + 
@@ -1494,13 +1339,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Perceived stress (pss)", color = "High Macarthur US status") 
 ```
 
-#### Nature time x Macarthur Community rung -> Positive affect
+## Nature time x Macarthur Community rung -> Positive affect
 ```{r, message=F}
 df_proc %>% 
   lm(panas_pos ~ nature_time * macarthur_comm_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(panas_pos ~ nature_time * high_macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = panas_pos, color = high_macarthur_comm_rung)) + 
@@ -1509,13 +1351,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High Macarthur Community status") 
 ```
 
-#### Nature time x Macarthur Community rung -> Flourishing 
+## Nature time x Macarthur Community rung -> Flourishing 
 ```{r, message=F}
 df_proc %>% 
   lm(fm ~ nature_time * macarthur_comm_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(fm ~ nature_time * high_macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = fm, color = high_macarthur_comm_rung)) + 
@@ -1524,14 +1363,11 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Flourishing (fm)", color = "High Macarthur Community status") 
 ```
 
-#### Nature time x Macarthur Community rung -> Satisfaction with life  
+## Nature time x Macarthur Community rung -> Satisfaction with life  
 ```{r, message=F}
 
 df_proc %>%
   lm(swl ~ nature_time * macarthur_comm_rung, .) %>%
-  summary
-df_proc %>%
-  lm(swl ~ nature_time * high_macarthur_comm_rung, .) %>%
   summary
 df_proc %>%
   ggplot(aes(x = nature_time, y = swl, color = high_macarthur_comm_rung)) +
@@ -1540,13 +1376,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Satisfaction with life (swl)", color = "High Macarthur Community status")
 ```
 
-#### Nature time x Macarthur Community rung -> Negative affect   
+## Nature time x Macarthur Community rung -> Negative affect   
 ```{r, message=F}
 df_proc %>% 
   lm(panas_neg ~ nature_time * macarthur_comm_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(panas_neg ~ nature_time * high_macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = panas_neg, color = high_macarthur_comm_rung)) + 
@@ -1555,13 +1388,10 @@ df_proc %>%
   labs(x = "Hrs/week in nature", y = "Negative affect (PANAS-neg)", color = "High Macarthur Community status") 
 ```
 
-#### Nature time x Macarthur Community rung -> Perceived stress 
+## Nature time x Macarthur Community rung -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
   lm(pss ~ nature_time * macarthur_comm_rung, .) %>% 
-  summary
-df_proc %>% 
-  lm(pss ~ nature_time * high_macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
   ggplot(aes(x = nature_time, y = pss, color = high_macarthur_comm_rung)) + 
@@ -1572,11 +1402,200 @@ df_proc %>%
 
 
 
-## 2b: Moderations mediated by reappraisal and rumination 
+# 2b: Moderations mediated by reappraisal and rumination 
 We hypothesize that these moderations will be mediated by frequency of reappraisal and rumination.
-**We can wait on this section for now**
 
+## Nature time x ACE binary -> Reappraisal -> Pos affect 
+* Non-significant indirect effect 
+```{r, message=F}
+mod <- '
+pmerq_reappraise ~ a*nature_time:high_ace + nature_time + high_ace
+panas_pos ~ b*pmerq_reappraise + cp*nature_time:high_ace + nature_time + high_ace
+indirect := a*b
+total := indirect + cp
+'
+fit <- df_proc %>% 
+  sem(mod,
+      se="bootstrap",
+      data=.)
+summary(
+  fit,
+  fit.measures=T,
+  rsq=T,
+  standardized=T
+)
 
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>%
+  as.data.frame %>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  select(-std.lv, -std.nox)
+```
+
+## Nature time x ACE -> Rumination -> Pos affect 
+* Non-significant indirect effect
+```{r, message=F}
+mod <- '
+rrs_brood ~ a*nature_time:high_ace + nature_time + high_ace
+panas_pos ~ b*rrs_brood + cp*nature_time:high_ace + nature_time + high_ace
+indirect := a*b
+total := indirect + cp
+'
+fit <- df_proc %>% 
+  sem(mod,
+      se="bootstrap",
+      data=.)
+summary(
+  fit,
+  fit.measures=T,
+  rsq=T,
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>%
+  as.data.frame %>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  select(-std.lv, -std.nox)
+```
+
+## Nature time x ACE -> Reappraisal -> Neg affect 
+* Non-significant indirect effect
+```{r, message=F}
+mod <- '
+pmerq_reappraise ~ a*nature_time:high_ace + nature_time + high_ace
+panas_neg ~ b*pmerq_reappraise + cp*nature_time:high_ace + nature_time + high_ace
+indirect := a*b
+total := indirect + cp
+'
+fit <- df_proc %>% 
+  sem(mod,
+      se="bootstrap",
+      data=.)
+summary(
+  fit,
+  fit.measures=T,
+  rsq=T,
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>%
+  as.data.frame %>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  select(-std.lv, -std.nox)
+```
+
+## Nature time x ACE -> Rumination -> Neg affect
+* Non-significant indirect effect
+```{r, message=F}
+mod <- '
+rrs_brood ~ a*nature_time:high_ace + nature_time + high_ace
+panas_neg ~ b*rrs_brood + cp*nature_time:high_ace + nature_time + high_ace
+indirect := a*b
+total := indirect + cp
+'
+fit <- df_proc %>% 
+  sem(mod,
+      se="bootstrap",
+      data=.)
+summary(
+  fit,
+  fit.measures=T,
+  rsq=T,
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>%
+  as.data.frame %>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  select(-std.lv, -std.nox)
+```
+
+## Nature time x Macarthur US -> Reappraisal -> SWL
+* Non-significant indirect effect 
+```{r, message=F}
+mod <- '
+pmerq_reappraise ~ a*nature_time:macarthur_us_rung + nature_time + macarthur_us_rung
+swl ~ b*pmerq_reappraise + cp*nature_time:macarthur_us_rung + nature_time + macarthur_us_rung
+indirect := a*b
+total := indirect + cp
+'
+fit <- df_proc %>% 
+  sem(mod,
+      se="bootstrap",
+      data=.)
+summary(
+  fit,
+  fit.measures=T,
+  rsq=T,
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>%
+  as.data.frame %>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  select(-std.lv, -std.nox)
+```
+
+## Nature time x Macarthur US -> Rumination -> SWL
+* Non-significant indirect effect 
+```{r, message=F}
+mod <- '
+rrs_brood ~ a*nature_time:macarthur_us_rung + nature_time + macarthur_us_rung
+swl ~ b*rrs_brood + cp*nature_time:macarthur_us_rung + nature_time + macarthur_us_rung
+indirect := a*b
+total := indirect + cp
+'
+fit <- df_proc %>% 
+  sem(mod,
+      se="bootstrap",
+      data=.)
+summary(
+  fit,
+  fit.measures=T,
+  rsq=T,
+  standardized=T
+)
+
+parameterEstimates(
+  fit,
+  boot.ci.type="bca.simple",
+  level=0.95,
+  ci=TRUE,
+  standardized = TRUE
+) %>%
+  as.data.frame %>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  select(-std.lv, -std.nox)
+```
 
 # Session Info
 ```{r, message=F}
