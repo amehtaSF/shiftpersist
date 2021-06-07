@@ -1,8 +1,10 @@
 ---
 title: "Nature ER National Qualtrics Study"
 author: "Ashish and Jordan"
-date: "2021-05-24"
+date: "`r Sys.Date()`"
 output: rmdformats::readthedown
+params:
+  inputdatafile: ""
 ---
 
 # Notes
@@ -12,7 +14,6 @@ output: rmdformats::readthedown
 
 # Initialization
 ```{r, message=FALSE}
-rm(list=ls())
 library(lavaan)
 library(lmerTest)
 library(here)
@@ -24,14 +25,19 @@ theme_set(theme_bw())
 ```
 
 # Preprocessing 
+## Functions
+```{r}
+scale <- function(...){as.vector(unlist(base::scale(...)))}
+```
+
 
 ## Read data
 ```{r, message=F}
 
-data_filepath <- "data/proc/national_study_2b_proc.csv"
-df_file <- read_csv(here("data/proc/national_study_2b_proc.csv"))
+data_filepath <- params$inputdatafile
+df_file <- read_csv(here(data_filepath))
 df_proc <- df_file %>% 
-  mutate(high_ace = as.factor(high_ace))
+  mutate(hi_ace = as.factor(high_ace))
 
 ```
 
@@ -43,6 +49,7 @@ df_proc <- df_file %>%
 ```
 
 # Preregistration 
+
 ## Hypotheses
 
 [Pre-registration](https://osf.io/t94h2) 
@@ -447,7 +454,7 @@ df_proc %>%
   ggplot(aes(x = ace)) +
   geom_histogram(binwidth = 1)
 df_proc %>% 
-  ggplot(aes(x = high_ace)) +
+  ggplot(aes(x = hi_ace)) +
   geom_bar()
 ```
 
@@ -603,7 +610,10 @@ We hypothesize that nature contact will be associated with greater frequency of 
 * Heteroscedasticity 
 
 ```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$sitselect_approach)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>%
+  lm(sitselect_approach ~ nature_time, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = sitselect_approach, y = nature_time)) + 
@@ -613,8 +623,11 @@ df_proc %>%
 
 
 ## Nature time <-> distraction 
-```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$pmerq_attdep_dis)
+```{r}
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(pmerq_attdep_dis ~ nature_time, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = pmerq_attdep_dis, y = nature_time)) + 
@@ -622,9 +635,14 @@ df_proc %>%
   geom_smooth(method = "lm")
 ```
 
+
+
 ## ** Nature time <-> reappraisal 
 ```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$pmerq_reappraise)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(pmerq_reappraise ~ nature_time, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = pmerq_reappraise, y = nature_time)) + 
@@ -634,7 +652,10 @@ df_proc %>%
 
 ## † Nature time <-> rumination 
 ```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$rrs_brood)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(rrs_brood ~ nature_time, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = rrs_brood, y = nature_time)) + 
@@ -644,7 +665,10 @@ df_proc %>%
 
 ## ** Nature time <-> flourishing 
 ```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$fm)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(fm ~ nature_time, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = fm, y = nature_time)) + 
@@ -654,7 +678,10 @@ df_proc %>%
 
 ## *** Nature time <-> satisfaction with life 
 ```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$swl)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(swl ~ nature_time, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(y = swl, x = nature_time)) + 
@@ -664,7 +691,11 @@ df_proc %>%
 
 ## Nature time <-> perceived stress 
 ```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$pss)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(pss ~ nature_time, .) %>% 
+  summary
+
 
 df_proc %>% 
   ggplot(aes(x = pss, y = nature_time)) + 
@@ -674,7 +705,10 @@ df_proc %>%
 
 ## *** Nature time <-> positive affect 
 ```{r, message=F}
-cor.test(df_proc$nature_time, df_proc$panas_pos)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(panas_pos ~ nature_time, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = panas_pos, y = nature_time)) + 
@@ -684,7 +718,10 @@ df_proc %>%
 
 ## Nature freq <-> negative affect 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$panas_neg)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(panas_neg ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = panas_neg, y = nature_freq)) + 
@@ -694,7 +731,10 @@ df_proc %>%
 
 ## *** Nature freq <-> sitselect_approach
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$sitselect_approach)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(sitselect_approach ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = sitselect_approach, y = nature_freq)) + 
@@ -705,7 +745,10 @@ df_proc %>%
 
 ## Nature freq <-> distraction 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$pmerq_attdep_dis)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(pmerq_attdep_dis ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = pmerq_attdep_dis, y = nature_freq)) + 
@@ -715,7 +758,10 @@ df_proc %>%
 
 ## *** Nature freq <-> reappraisal 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$pmerq_reappraise)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(pmerq_reappraise ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = pmerq_reappraise, y = nature_freq)) + 
@@ -725,7 +771,10 @@ df_proc %>%
 
 ## ** Nature freq <-> rumination 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$rrs_brood)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(rrs_brood ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = rrs_brood, y = nature_freq)) + 
@@ -735,7 +784,10 @@ df_proc %>%
 
 ## ** Nature freq <-> flourishing 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$fm)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(fm ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = fm, y = nature_freq)) + 
@@ -745,7 +797,11 @@ df_proc %>%
 
 ## *** Nature freq <-> satisfaction with life 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$swl)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(swl ~ nature_freq, .) %>% 
+  summary
+
 
 df_proc %>% 
   ggplot(aes(y = swl, x = nature_freq)) + 
@@ -755,7 +811,10 @@ df_proc %>%
 
 ## Nature freq <-> perceived stress 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$pss)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(pss ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = pss, y = nature_freq)) + 
@@ -765,7 +824,10 @@ df_proc %>%
 
 ## *** Nature freq <-> positive affect 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$panas_pos)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(panas_pos ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = panas_pos, y = nature_freq)) + 
@@ -775,7 +837,10 @@ df_proc %>%
 
 ## Nature freq <-> negative affect 
 ```{r, message=F}
-cor.test(df_proc$nature_freq, df_proc$panas_neg)
+df_proc %>% 
+  mutate_if(is.numeric, scale) %>% 
+  lm(panas_neg ~ nature_freq, .) %>% 
+  summary
 
 df_proc %>% 
   ggplot(aes(x = panas_neg, y = nature_freq)) + 
@@ -879,7 +944,6 @@ fit <- run_mediation("nature_time",
 
 ## ** Nature time -> Reappraisal -> Flourishing 
 
-* indirect ß = .06, p = .008 
 ```{r, message=F}
 
 fit <- run_mediation("nature_time", 
@@ -916,7 +980,6 @@ fit <- run_mediation("nature_time",
 
 ## ** Nature time -> Reappraisal -> Satisfaction with life 
 
-* indirect effect ß = .05, p = .007
 ```{r, message=F}
 
 fit <- run_mediation("nature_time", 
@@ -990,15 +1053,15 @@ We hypothesize that nature contact will moderate the associations of (i) adverse
 * marginally significant when using binary ACE 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(panas_pos ~ nature_time * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(panas_pos ~ nature_time * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(panas_pos ~ nature_time * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_time, y = panas_pos, color = high_ace)) + 
+  ggplot(aes(x = nature_time, y = panas_pos, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Hrs/week in nature", y = "Positive affect (PANAS-pos)", color = "High ACE") 
@@ -1007,15 +1070,15 @@ df_proc %>%
 ## Nature time x ACE -> Flourishing 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(fm ~ nature_time * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(fm ~ nature_time * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(fm ~ nature_time * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_time, y = fm, color = high_ace)) + 
+  ggplot(aes(x = nature_time, y = fm, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Hrs/week in nature", y = "Flourishing (fm)", color = "High ACE") 
@@ -1025,15 +1088,15 @@ df_proc %>%
 ```{r, message=F}
 
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(swl ~ nature_time * ace, .) %>%
   summary
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(swl ~ nature_time * high_ace, .) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(swl ~ nature_time * hi_ace, .) %>%
   summary
 df_proc %>%
-  ggplot(aes(x = nature_time, y = swl, color = high_ace)) +
+  ggplot(aes(x = nature_time, y = swl, color = hi_ace)) +
   geom_point(alpha = .3) +
   geom_smooth(method = "lm") +
   labs(x = "Hrs/week in nature", y = "Satisfaction with life (swl)", color = "High ACE")
@@ -1044,15 +1107,15 @@ df_proc %>%
 * marginally significant when using binary ACE 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(panas_neg ~ nature_time * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(panas_neg ~ nature_time * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(panas_neg ~ nature_time * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_time, y = panas_neg, color = high_ace)) + 
+  ggplot(aes(x = nature_time, y = panas_neg, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Hrs/week in nature", y = "Negative affect (PANAS-neg)", color = "High ACE") 
@@ -1062,15 +1125,15 @@ df_proc %>%
 ## Nature time x ACE -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(pss ~ nature_time * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(pss ~ nature_time * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(pss ~ nature_time * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_time, y = pss, color = high_ace)) + 
+  ggplot(aes(x = nature_time, y = pss, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Hrs/week in nature", y = "Perceived stress (pss)", color = "High ACE") 
@@ -1079,7 +1142,7 @@ df_proc %>%
 ## Nature time x Macarthur US -> Positive affect
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(panas_pos ~ nature_time * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1092,7 +1155,7 @@ df_proc %>%
 ## Nature time x Macarthur US -> Flourishing 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(fm ~ nature_time * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1106,7 +1169,7 @@ df_proc %>%
 ```{r, message=F}
 
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%  
+  dplyr::mutate_if(is.numeric, scale) %>%  
   lm(swl ~ nature_time * macarthur_us_rung, .) %>%
   summary
 df_proc %>%
@@ -1119,7 +1182,7 @@ df_proc %>%
 ## Nature time x Macarthur US -> Negative affect   
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(panas_neg ~ nature_time * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1132,7 +1195,7 @@ df_proc %>%
 ## Nature time x Macarthur US -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(pss ~ nature_time * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1145,7 +1208,7 @@ df_proc %>%
 ## Nature time x Macarthur Community -> Positive affect
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(panas_pos ~ nature_time * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1159,7 +1222,7 @@ df_proc %>%
 ## Nature time x Macarthur Community -> Flourishing 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(fm ~ nature_time * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1174,7 +1237,7 @@ df_proc %>%
 ```{r, message=F}
 
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%  
+  dplyr::mutate_if(is.numeric, scale) %>%  
   lm(swl ~ nature_time * macarthur_comm_rung, .) %>%
   summary
 df_proc %>%
@@ -1188,7 +1251,7 @@ df_proc %>%
 ## Nature time x Macarthur Community -> Negative affect   
 ```{r, message=F}
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(panas_neg ~ nature_time * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1202,7 +1265,7 @@ df_proc %>%
 ## Nature time x Macarthur Community -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(pss ~ nature_time * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1216,15 +1279,15 @@ df_proc %>%
 ## Nature freq x ACE -> Positive affect 
 ```{r, message=F}
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(panas_pos ~ nature_freq * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(panas_pos ~ nature_freq * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(panas_pos ~ nature_freq * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_freq, y = panas_pos, color = high_ace)) + 
+  ggplot(aes(x = nature_freq, y = panas_pos, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Nature frequency", y = "Positive affect (PANAS-pos)", color = "High ACE") 
@@ -1236,15 +1299,15 @@ df_proc %>%
 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(fm ~ nature_freq * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(fm ~ nature_freq * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(fm ~ nature_freq * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_freq, y = fm, color = high_ace)) + 
+  ggplot(aes(x = nature_freq, y = fm, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Nature frequency", y = "Flourishing (fm)", color = "High ACE") 
@@ -1254,15 +1317,15 @@ df_proc %>%
 ```{r, message=F}
 
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(swl ~ nature_freq * ace, .) %>%
   summary
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(swl ~ nature_freq * high_ace, .) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(swl ~ nature_freq * hi_ace, .) %>%
   summary
 df_proc %>%
-  ggplot(aes(x = nature_freq, y = swl, color = high_ace)) +
+  ggplot(aes(x = nature_freq, y = swl, color = hi_ace)) +
   geom_point(alpha = .3) +
   geom_smooth(method = "lm") +
   labs(x = "Nature frequency", y = "Satisfaction with life (swl)", color = "High ACE")
@@ -1272,15 +1335,15 @@ df_proc %>%
 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(panas_neg ~ nature_freq * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(panas_neg ~ nature_freq * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(panas_neg ~ nature_freq * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_freq, y = panas_neg, color = high_ace)) + 
+  ggplot(aes(x = nature_freq, y = panas_neg, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Nature frequency", y = "Negative affect (PANAS-neg)", color = "High ACE") 
@@ -1290,15 +1353,15 @@ df_proc %>%
 ## Nature freq x ACE -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
+  dplyr::mutate_if(is.numeric, scale) %>%
   lm(pss ~ nature_freq * ace, .) %>% 
   summary
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%
-  lm(pss ~ nature_freq * high_ace, .) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%
+  lm(pss ~ nature_freq * hi_ace, .) %>% 
   summary
 df_proc %>% 
-  ggplot(aes(x = nature_freq, y = pss, color = high_ace)) + 
+  ggplot(aes(x = nature_freq, y = pss, color = hi_ace)) + 
   geom_point(alpha = .3) + 
   geom_smooth(method = "lm") +
   labs(x = "Nature frequency", y = "Perceived stress (pss)", color = "High ACE") 
@@ -1307,7 +1370,7 @@ df_proc %>%
 ## Nature freq x Macarthur US -> Positive affect
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>% 
   lm(panas_pos ~ nature_freq * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1320,7 +1383,7 @@ df_proc %>%
 ## Nature freq x Macarthur US -> Flourishing 
 ```{r, message=F}
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%  
+  dplyr::mutate_if(is.numeric, scale) %>%  
   lm(fm ~ nature_freq * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1333,7 +1396,7 @@ df_proc %>%
 ## Nature freq x Macarthur US -> Satisfaction with life  
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%  
+  dplyr::mutate_if(is.numeric, scale) %>%  
   lm(swl ~ nature_freq * macarthur_us_rung, .) %>%
   summary
 df_proc %>%
@@ -1346,8 +1409,8 @@ df_proc %>%
 ## ** Nature freq x Macarthur US -> Negative affect   
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>% 
+  dplyr::mutate_if(is.numeric, scale) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>% 
   lm(panas_neg ~ nature_freq * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1360,7 +1423,7 @@ df_proc %>%
 ## ** Nature freq x Macarthur US -> Perceived stress 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(pss ~ nature_freq * macarthur_us_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1373,7 +1436,7 @@ df_proc %>%
 ## Nature freq x Macarthur Community -> Positive affect
 ```{r, message=F}
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(panas_pos ~ nature_freq * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1387,7 +1450,7 @@ df_proc %>%
 ## Nature freq x Macarthur Community -> Flourishing 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(fm ~ nature_freq * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1401,7 +1464,7 @@ df_proc %>%
 ## Nature freq x Macarthur Community -> Satisfaction with life  
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%  
+  dplyr::mutate_if(is.numeric, scale) %>%  
   lm(swl ~ nature_freq * macarthur_comm_rung, .) %>%
   summary
 df_proc %>%
@@ -1418,7 +1481,7 @@ df_proc %>%
 
 ```{r, message=F}
 df_proc %>% 
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(panas_neg ~ nature_freq * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1435,7 +1498,7 @@ df_proc %>%
 
 ```{r, message=F}
 df_proc %>%
-  dplyr::mutate_if(is.numeric, ~as.vector(unlist(scale(.)))) %>%   
+  dplyr::mutate_if(is.numeric, scale) %>%   
   lm(pss ~ nature_freq * macarthur_comm_rung, .) %>% 
   summary
 df_proc %>% 
@@ -1656,8 +1719,7 @@ fit <- run_mediated_moderation("nature_freq", "macarthur_comm_rung",
                                data=df_proc)
 ```
 
-## ** Nature freq x Macarthur community -> Rumination -> Neg affect
-
+## *** Nature freq x Macarthur community -> Rumination -> Neg affect
 
 ```{r, message=F}
 fit <- run_mediated_moderation("nature_freq", "macarthur_comm_rung",
@@ -1666,6 +1728,7 @@ fit <- run_mediated_moderation("nature_freq", "macarthur_comm_rung",
                                se="bootstrap",
                                data=df_proc)
 ```
+
 ## Nature freq x Macarthur community -> Reappraisal -> Perceived stress
 
 * Non-significant indirect effect 

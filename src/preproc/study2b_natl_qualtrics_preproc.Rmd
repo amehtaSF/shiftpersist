@@ -1,13 +1,15 @@
 ---
 title: "Preprocessing script"
 author: "Ashish"
-date: ""
-output: rmdformats::readthedown
+date: "`r Sys.Date()`"
+params:
+  inputfile: ""
+  codebookfile: ""
+  outputfile: ""
 ---
 
 # Initialization
 ```{r, message=FALSE}
-rm(list=ls())
 library(here)
 library(tidyverse)
 library(tidylog)
@@ -15,6 +17,7 @@ theme_set(theme_bw())
 ```
 
 # Preprocessing 
+
 ## Functions 
 ```{r, message=F, warning=F}
 codebook_renamer <- function(df, codebook, 
@@ -84,12 +87,13 @@ tally_scale <- function(df,
 
 ## Read data
 ```{r, message=F}
-codebook_filepath <- here("doc/Winter_2020_Survey_EWB_S2B_National_April_26_2021_11_30_codebook.xlsx")
-codebook_vars <- readxl::read_excel(codebook_filepath, sheet="variables")
-codebook_values <- readxl::read_excel(codebook_filepath, sheet="values") %>% 
+codebook_file <- params$codebookfile
+codebook_vars <- readxl::read_excel(here(codebook_file), sheet="variables")
+codebook_values <- readxl::read_excel(here(codebook_file), sheet="values") %>% 
   mutate(old_value = str_replace_all(old_value, "\r|\n", ""))
 
-df_file <- readxl::read_excel(here("data/raw/2021-06-03/national_study_2b_raw.xlsx")) %>% 
+input_file <- params$inputfile
+df_file <- readxl::read_excel(here(input_file)) %>% 
   filter_all(any_vars(!is.na(.)))
 df_raw <- df_file %>% 
   slice(-1:-2) %>%
@@ -261,13 +265,20 @@ df_proc <- df_recoded %>%
   mutate(high_ace = case_when(
     ace <= 4 ~ 0, 
     ace > 4 ~ 1)) %>% 
+  mutate(high_ace = as.factor(high_ace)) %>% 
   mutate(high_macarthur_us_rung = case_when(
     macarthur_us_rung <= median(macarthur_us_rung) ~ 0,
     macarthur_us_rung > median(macarthur_us_rung) ~ 1)) %>% 
   mutate(high_macarthur_comm_rung = case_when(
     macarthur_comm_rung <= median(macarthur_comm_rung) ~ 0,
     macarthur_comm_rung > median(macarthur_comm_rung) ~ 1)) %>% 
-  cbind(get_race(.$race))
+  cbind(get_race(.$race)) %>% 
+  # -- create vars -- #
+  # mutate(is_white = case_when(
+  #   race_white == 
+  # ))
+  # -- scale numerics -- #
+  mutate_if(is.numeric, list(sc = ~as.vector(unlist(scale(.)))))
 ```
 
 
@@ -279,9 +290,9 @@ df_proc <- df_recoded %>%
 
 # 
 ```{r}
-filepath_output <- "data/proc/national_study_2b_proc.csv"
+# filepath_output <- "data/proc/national_study_2b_proc.csv"
 df_proc %>% 
-  write_csv(here(filepath_output))
+  write_csv(here(params$outputfile))
 ```
 
 
