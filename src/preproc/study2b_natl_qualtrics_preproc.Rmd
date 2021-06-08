@@ -2,10 +2,6 @@
 title: "Preprocessing script"
 author: "Ashish"
 date: "`r Sys.Date()`"
-params:
-  inputfile: ""
-  codebookfile: ""
-  outputfile: ""
 ---
 
 # Initialization
@@ -87,12 +83,14 @@ tally_scale <- function(df,
 
 ## Read data
 ```{r, message=F}
-codebook_file <- params$codebookfile
+codebook_file <- tryCatch(params$codebookfile,
+                          error=function(e) {"doc/Winter_2020_Survey_EWB_S2B_National_April_26_2021_11_30_codebook.xlsx"})
 codebook_vars <- readxl::read_excel(here(codebook_file), sheet="variables")
 codebook_values <- readxl::read_excel(here(codebook_file), sheet="values") %>% 
   mutate(old_value = str_replace_all(old_value, "\r|\n", ""))
 
-input_file <- params$inputfile
+input_file <- tryCatch(params$inputfile,
+                       error=function(e) {"data/raw/2021-06-03/national_study_2b_raw.xlsx"})
 df_file <- readxl::read_excel(here(input_file)) %>% 
   filter_all(any_vars(!is.na(.)))
 df_raw <- df_file %>% 
@@ -290,9 +288,10 @@ df_proc <- df_recoded %>%
 
 # 
 ```{r}
-# filepath_output <- "data/proc/national_study_2b_proc.csv"
+filepath_output <- tryCatch(params$outputfile,
+                            error=function(e){"data/proc/national_study_2b_proc.csv"})
 df_proc %>% 
-  write_csv(here(params$outputfile))
+  write_csv(here(filepath_output))
 ```
 
 
