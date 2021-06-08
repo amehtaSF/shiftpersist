@@ -3,8 +3,6 @@ title: "Nature ER National Qualtrics Study"
 author: "Ashish and Jordan"
 date: "`r Sys.Date()`"
 output: rmdformats::readthedown
-params:
-  inputdatafile: ""
 ---
 
 # Notes
@@ -28,13 +26,20 @@ theme_set(theme_bw())
 ## Functions
 ```{r}
 scale <- function(...){as.vector(unlist(base::scale(...)))}
+try_param <- function(p, default){
+  tryCatch(p,
+           error=function(e){
+             print(glue("Warning: could not find {rlang::quo_name(rlang::enquo(p))}"))
+             print(glue("Defaulting to {default}"))
+             return(default)
+           })
+}
 ```
 
 
 ## Read data
 ```{r, message=F}
-
-data_filepath <- params$inputdatafile
+data_filepath <- try_param(params$inputfile,"data/proc/national_study_2b_proc.csv")
 df_file <- read_csv(here(data_filepath))
 df_proc <- df_file %>% 
   mutate(hi_ace = as.factor(high_ace))
@@ -1671,9 +1676,7 @@ fit <- run_mediated_moderation("nature_freq", "macarthur_us_rung",
                                data=df_proc)
 ```
 
-## Nature freq x Macarthur US -> Rumination -> Neg affect
-
-* Non-significant indirect effect 
+## *** Nature freq x Macarthur US -> Rumination -> Neg affect
 
 ```{r, message=F}
 fit <- run_mediated_moderation("nature_freq", "macarthur_us_rung",
@@ -1695,9 +1698,7 @@ fit <- run_mediated_moderation("nature_freq", "macarthur_us_rung",
                                data=df_proc)
 ```
 
-## ** Nature freq x Macarthur US -> Rumination -> Perceived stress
-
-* Non-significant indirect effect 
+## *** Nature freq x Macarthur US -> Rumination -> Perceived stress
 
 ```{r, message=F}
 fit <- run_mediated_moderation("nature_freq", "macarthur_us_rung",
