@@ -1,0 +1,302 @@
+---
+title: "Exploratory analyses"
+author: "Ashish"
+date: "`r Sys.Date()`"
+output: rmdformats::readthedown
+---
+
+
+# Initialization
+```{r, message=FALSE}
+library(lavaan)
+library(lmerTest)
+library(here)
+library(tidyverse)
+library(glue)
+library(tidylog)
+require(rmdformats)
+theme_set(theme_bw())
+```
+
+# Preprocessing 
+
+## Read data
+```{r, message=F}
+
+data_filepath <- "data/proc/national_study_2b_proc.csv"
+df_file <- read_csv(here("data/proc/national_study_2b_proc.csv"))
+df_proc <- df_file %>% 
+  mutate(high_ace = as.factor(high_ace)) %>%   
+  mutate(income = factor(income, levels = c(
+    "Less than $10,000",
+    "$10,000 to $19,999",
+    "$20,000 to $29,999",
+    "$30,000 to $39,999",
+    "$40,000 to $49,999",
+    "$50,000 to $59,999",
+    "$60,000 to $69,999",
+    "$70,000 to $79,999",
+    "$80,000 to $89,999",
+    "$90,000 to $99,999",
+    "$100,000 to $149,999",
+    "$150,000 to $199,999",
+    "$200,000 to $249,999",
+    "$250,000 to $299,999",
+    "$300,000 or more"
+  )))
+
+```
+
+
+```{r, echo=FALSE}
+# -- End preprocessing -- #
+```
+
+# Correlations with PAQ
+```{r, message=FALSE}
+model_and_plot <- function(outcome, predictor, df = df_proc){
+  df %>% 
+    mutate_at(vars(one_of(outcome, predictor)), ~as.vector(unlist(scale(.)))) %>% 
+    lm(formula(glue("{outcome} ~ {predictor}")), data=.) %>% 
+    summary %>% 
+    print
+  df %>% 
+    ggplot(aes_string(x = predictor, y = outcome)) +
+    geom_point(size = .7, alpha = .3) +
+    geom_smooth(method = "lm", formula=y~x) 
+}
+```
+
+
+## Well being
+```{r, message=FALSE}
+model_and_plot("swl", "paq")
+model_and_plot("fm", "paq")
+model_and_plot("panas_pos", "paq")
+```
+
+## Ill being
+```{r, message=FALSE}
+model_and_plot("panas_neg", "paq")
+model_and_plot("pss", "paq")
+
+df_proc %>% 
+  lm(paq_sc ~ high_ace, .) %>% 
+  summary
+df_proc %>% 
+  ggplot(aes(x = high_ace, y = paq)) +
+  stat_summary(fun.data = "mean_cl_boot")
+```
+
+## SES
+```{r, message=FALSE}
+ordinal::clm(income ~ paq_sc, data=df_proc) %>% 
+  summary
+model_and_plot("macarthur_us_rung", "paq")
+model_and_plot("macarthur_comm_rung", "paq")
+df_proc %>% 
+  lm(paq_sc ~ race_white, .) %>% 
+  summary
+df_proc %>% 
+  mutate(is_minority = ifelse(race_chicano | race_black, TRUE, FALSE)) %>% 
+  lm(paq_sc ~ is_minority, .) %>% 
+  summary
+```
+
+## Social desirability 
+```{r, message=FALSE}
+model_and_plot("sds", "paq")
+```
+
+## Fear of coronavirus
+```{r, message=FALSE}
+model_and_plot("fcv", "paq")
+```
+
+## Nature exposure
+```{r, message=FALSE}
+model_and_plot("nature_time", "paq")
+model_and_plot("nature_freq", "paq")
+```
+
+## Emotion regulation
+### Situation focused
+```{r, message=FALSE}
+model_and_plot("pmerq_sitsel_dis", "paq")
+model_and_plot("pmerq_sitsel_eng", "paq")
+
+model_and_plot("pmerq_sitmod_dis", "paq")
+model_and_plot("pmerq_sitmod_eng", "paq")
+```
+
+### Attention
+```{r, message=FALSE}
+model_and_plot("pmerq_attdep", "paq")
+model_and_plot("pmerq_attdep_dis", "paq")
+model_and_plot("pmerq_attdep_eng", "paq")
+model_and_plot("rrs_brood", "paq")
+```
+
+### Reappraisal
+```{r, message=FALSE}
+model_and_plot("pmerq_reappraise", "paq") 
+model_and_plot("pmerq_repurp_dis", "paq") 
+model_and_plot("pmerq_repurp_eng", "paq") 
+model_and_plot("pmerq_recons_dis", "paq") 
+model_and_plot("pmerq_recons_eng", "paq") 
+```
+
+### Response focused
+```{r, message=FALSE}
+model_and_plot("pmerq_respmod_dis", "paq") 
+model_and_plot("pmerq_respmod_eng", "paq") 
+```
+
+# Correlations with TAS
+## Emotion regulation
+### Situation focused
+```{r, message=FALSE}
+model_and_plot("pmerq_sitsel_dis", "tas")
+model_and_plot("pmerq_sitsel_eng", "tas")
+model_and_plot("pmerq_sitmod_dis", "tas")
+model_and_plot("pmerq_sitmod_eng", "tas")
+```
+
+### Attention
+```{r, message=FALSE}
+model_and_plot("pmerq_attdep", "tas")
+model_and_plot("pmerq_attdep_dis", "tas")
+model_and_plot("pmerq_attdep_eng", "tas")
+model_and_plot("rrs_brood", "tas")
+```
+
+### Reappraisal
+```{r, message=FALSE}
+model_and_plot("pmerq_reappraise", "tas") 
+model_and_plot("pmerq_repurp_dis", "tas") 
+model_and_plot("pmerq_repurp_eng", "tas") 
+model_and_plot("pmerq_recons_dis", "tas") 
+model_and_plot("pmerq_recons_eng", "tas") 
+```
+
+### Response focused
+```{r, message=FALSE}
+model_and_plot("pmerq_respmod_dis", "tas") 
+model_and_plot("pmerq_respmod_eng", "tas") 
+```
+
+# Correlations of ER and well-being
+## Situation selection
+```{r, message=FALSE}
+model_and_plot("pmerq_sitsel_dis", "fm")
+model_and_plot("pmerq_sitsel_dis", "panas_pos")
+model_and_plot("pmerq_sitsel_dis", "swl")
+
+model_and_plot("pmerq_sitsel_eng", "fm")
+model_and_plot("pmerq_sitsel_eng", "panas_pos")
+model_and_plot("pmerq_sitsel_eng", "swl")
+```
+
+## Situation modification
+```{r, message=FALSE}
+model_and_plot("pmerq_sitmod_dis", "fm")
+model_and_plot("pmerq_sitmod_dis", "panas_pos")
+model_and_plot("pmerq_sitmod_dis", "swl")
+
+model_and_plot("pmerq_sitmod_eng", "fm")
+model_and_plot("pmerq_sitmod_eng", "panas_pos")
+model_and_plot("pmerq_sitmod_eng", "swl")
+```
+
+### Attention
+```{r, message=FALSE}
+model_and_plot("pmerq_attdep_dis", "fm")
+model_and_plot("pmerq_attdep_dis", "panas_pos")
+model_and_plot("pmerq_attdep_dis", "swl")
+
+model_and_plot("pmerq_attdep_eng", "fm")
+model_and_plot("pmerq_attdep_eng", "panas_pos")
+model_and_plot("pmerq_attdep_eng", "swl")
+
+model_and_plot("rrs_brood", "fm")
+model_and_plot("rrs_brood", "fm")
+model_and_plot("rrs_brood", "fm")
+```
+
+### Reappraisal
+```{r, message=FALSE}
+model_and_plot("pmerq_reappraise", "fm") 
+model_and_plot("pmerq_repurp_dis", "fm") 
+model_and_plot("pmerq_repurp_eng", "fm") 
+model_and_plot("pmerq_recons_dis", "fm") 
+model_and_plot("pmerq_recons_eng", "fm") 
+```
+
+### Response focused
+```{r, message=FALSE}
+model_and_plot("pmerq_respmod_dis", "fm") 
+model_and_plot("pmerq_respmod_eng", "fm") 
+```
+
+# Correlations of ER and ill-being
+## Situation selection
+```{r, message=FALSE}
+model_and_plot("pmerq_sitsel_dis", "pss")
+model_and_plot("pmerq_sitsel_dis", "panas_neg")
+
+model_and_plot("pmerq_sitsel_eng", "pss")
+model_and_plot("pmerq_sitsel_eng", "panas_neg")
+```
+
+## Situation modification
+```{r, message=FALSE}
+model_and_plot("pmerq_sitmod_dis", "pss")
+model_and_plot("pmerq_sitmod_dis", "panas_neg")
+
+model_and_plot("pmerq_sitmod_eng", "pss")
+model_and_plot("pmerq_sitmod_eng", "panas_neg")
+```
+
+### Attention
+```{r, message=FALSE}
+model_and_plot("pmerq_attdep_dis", "pss")
+model_and_plot("pmerq_attdep_dis", "panas_neg")
+
+model_and_plot("pmerq_attdep_eng", "pss")
+model_and_plot("pmerq_attdep_eng", "panas_neg")
+
+model_and_plot("rrs_brood", "pss")
+model_and_plot("rrs_brood", "panas_neg")
+```
+
+### Reappraisal
+```{r, message=FALSE}
+model_and_plot("pmerq_reappraise", "pss") 
+model_and_plot("pmerq_reappraise", "panas_neg") 
+
+model_and_plot("pmerq_repurp_dis", "pss") 
+model_and_plot("pmerq_repurp_dis", "panas_neg")
+
+model_and_plot("pmerq_repurp_eng", "pss") 
+model_and_plot("pmerq_repurp_eng", "panas_neg") 
+
+model_and_plot("pmerq_recons_dis", "pss") 
+model_and_plot("pmerq_recons_dis", "panas_neg") 
+
+model_and_plot("pmerq_recons_eng", "pss") 
+model_and_plot("pmerq_recons_eng", "panas_neg") 
+```
+
+### Response focused
+```{r, message=FALSE}
+model_and_plot("pmerq_respmod_dis", "pss") 
+model_and_plot("pmerq_respmod_dis", "panas_neg") 
+
+model_and_plot("pmerq_respmod_eng", "pss") 
+model_and_plot("pmerq_respmod_eng", "panas_neg") 
+```
+
+
+
+<!-- # Webb SS moderation with PAQ -->
+
